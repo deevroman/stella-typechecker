@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <title>Stella Typecheck</title>
+    <style>
+        :root {
+            color-scheme: dark;
+        }
+
+        html, body {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            background-color: #111111;
+            color: #00ff00;
+            font-family: monospace;
+        }
+
+        body {
+            display: flex;
+            flex-direction: column;
+            padding: 1em;
+            box-sizing: border-box;
+        }
+
+        h1 {
+            margin-bottom: 1em;
+            font-size: 1.5em;
+            color: #663399;
+        }
+
+        #result {
+            flex: 1;
+            margin-top: 1em;
+            padding: 1em;
+            border: 1px solid #663399;
+            background-color: #000000;
+            color: #00dd00;
+            white-space: pre-wrap;
+            overflow-y: auto;
+            font-size: 16px;
+        }
+    </style>
+</head>
+<body>
+
+<h1>Stella Typecheck</h1>
+<div id="code" name="code" placeholder="Start typing your code..."></div>
+<div id="result">Typecheck output will appear here...</div>
+
+</body>
+</html>

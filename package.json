@@ -1,0 +1,50 @@
+{
+  "name": "typechecker",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "build": "webpack --mode production",
+    "dev": "webpack serve --mode development",
+    "antlr4ts": "make parser",
+    "test": "vitest"
+  },
+  "type": "module",
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "devDependencies": {
+    "@types/node": "^22.13.10",
+    "@vitest/coverage-v8": "^3.1.4",
+    "antlr4ts-cli": "^0.5.0-alpha.4",
+    "html-webpack-plugin": "^5.6.3",
+    "prettier": "^3.3.1",
+    "ts-loader": "^9.5.2",
+    "tsx": "^4.19.4",
+    "typescript": "^5.2.2",
+    "vitest": "^3.1.2",
+    "webpack": "^5.99.7",
+    "webpack-cli": "^6.0.1",
+    "webpack-dev-server": "^5.2.1"
+  },
+  "dependencies": {
+    "@codemirror/basic-setup": "^0.20.0",
+    "@codemirror/lang-javascript": "^6.2.3",
+    "@codemirror/state": "^6.5.2",
+    "@codemirror/theme-one-dark": "^6.1.2",
+    "@codemirror/view": "^6.36.7",
+    "antlr4ts": "^0.5.0-alpha.4",
+    "assert": "^2.1.0",
+    "buffer": "^6.0.3",
+    "codemirror": "^6.0.1",
+    "codemirror-ssr": "^0.65.0",
+    "process": "^0.11.10",
+    "stream-browserify": "^3.0.0",
+    "ts-node": "^10.9.2",
+    "util": "^0.12.5"
+  },
+  "bin": {
+    "typechecker-cli": "src/cli.ts"
+  },
+  "packageManager": "yarn@1.22.22+sha512.a6b2f7906b721bba3d67d4aff083df04dad64c399707841b7acf00f6b133b7ac24255f2652fa22ae3534329dc6180534e98d17432037ff6fd140556e2bb3137e"
+}
