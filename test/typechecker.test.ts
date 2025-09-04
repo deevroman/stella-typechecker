@@ -296,6 +296,18 @@ fn main(n : Nat) -> Bool {
     expect(res).instanceof(TypeErrorsReport);
 })
 
+test('succ_true', () => {
+    const res = parseAndTypecheck(`
+language core;
+
+fn main(n : Nat) -> Bool {
+    return succ(true)
+}
+`);
+    expect(res).instanceof(TypeErrorsReport);
+    expect((res as TypeErrorsReport).errors[0].type).toBe(error_type.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION)
+})
+
 test('cons', () => {
     const res = parseAndTypecheck(`
 language core;
@@ -974,7 +986,7 @@ fn main(succeed : Bool) -> Nat {
     expect((res as TypeErrorsReport).errors[0].type).toBe(error_type.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION)
 })
 
-test('variant_bad5', () => {
+test('variant_bad_if_in_if', () => {
     const res = parseAndTypecheck(`
 language core;
 
@@ -986,6 +998,32 @@ fn attempt(get_one? : Bool) -> <| value : Nat, failure : Unit |> {
       then if get_one?
         then <| value = 0 |>
         else <| failure2 = unit |>
+      else <| failure = unit |>
+}
+
+fn main(succeed : Bool) -> Nat {
+  return match attempt(succeed) {
+      <| value = n |> => succ(n)
+    | <| failure = f |> => 0
+  }
+}
+`);
+    expect(res).instanceof(TypeErrorsReport);
+    expect((res as TypeErrorsReport).errors[0].type).toBe(error_type.ERROR_UNEXPECTED_VARIANT_LABEL)
+})
+
+test('variant_bad_if_in_if2', () => {
+    const res = parseAndTypecheck(`
+language core;
+
+extend with #variants, #unit-type;
+
+fn attempt(get_one? : Bool) -> <| value : Nat, failure : Unit |> {
+  return
+    if get_one?
+      then if get_one?
+        then <| value = 0 |>
+        else <| failure = 0 |>
       else <| failure = unit |>
 }
 
@@ -1260,25 +1298,5 @@ fn inc3(ref : &Nat) -> Nat {
 
 fn main(n : Nat) -> Nat {
   return let ref = new(n) in inc3(ref)
-}
-* */
-
-/*
-language core;
-
-extend with #variants, #unit-type;
-
-fn attempt(get_one? : Bool) -> <| value : Nat, failure : Unit |> {
-  return
-    if get_one?
-      then <| value = 0 |>
-      else <| failure = unit |>
-}
-
-fn main(succeed : Bool) -> Nat {
-  return match attempt(succeed) {
-      <| value = n |> => succ(n)
-    | <| failure = f |> => 0
-  }
 }
 * */

@@ -378,6 +378,10 @@ export class stellaParserVisitorImpl implements stellaParserVisitor<void> {
                 if (!returnTypeFromContext.isEqualType(returnType)) {
                     this.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION))
                 }
+            } else if (returnType instanceof StellaVariant && returnTypeFromContext instanceof StellaVariant) {
+                if (!returnType.assignableTo(returnTypeFromContext)) {
+                    this.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION))
+                }
             } else {
                 this.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION))
             }
@@ -1055,8 +1059,12 @@ export class stellaParserVisitorImpl implements stellaParserVisitor<void> {
         return undefined;
     }
 
-    visitSucc(ctx: SuccContext): void {
-        return ctx._n.accept(this) // todo
+    visitSucc(ctx: SuccContext): StellaType {
+        const argType = ctx._n.accept(this)! as StellaType
+        if (argType?.type !== "NAT_TYPE") {
+            this.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION))
+        }
+        return argType
     }
 
     visitTail(ctx: TailContext): StellaType {
