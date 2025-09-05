@@ -137,7 +137,8 @@ export class StellaRef extends StellaType {
     }
 
     tryAssignTo(oth: StellaType, ctx: stellaParserVisitorImpl) {
-        if (!(oth instanceof StellaList)) {
+        if (!(oth instanceof StellaRef)) {
+            // fixme type
             ctx.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION))
             return
         }
@@ -165,7 +166,7 @@ export class StellaSumType extends StellaType {
 
     tryAssignTo(oth: StellaType, ctx: stellaParserVisitorImpl) {
         if (!(oth instanceof StellaSumType)) {
-            ctx.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_LIST))
+            ctx.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_INJECTION))
             return
         }
         this.leftType!.tryAssignTo(oth.leftType!, ctx)

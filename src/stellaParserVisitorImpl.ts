@@ -390,7 +390,11 @@ export class stellaParserVisitorImpl implements stellaParserVisitor<void> {
     visitDotRecord(ctx: DotRecordContext): StellaType | undefined {
         const type = ctx._expr_.accept(this)! as StellaType;
         if (type instanceof StellaRecord) {
-            return type.entities[ctx._label.text!]
+            const value = type.entities[ctx._label.text!]
+            if (!value) {
+                this.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_FIELD_ACCESS))
+            }
+            return value
         } else {
             this.addError(new TypecheckError(error_type.ERROR_NOT_A_RECORD))
         }
@@ -492,7 +496,7 @@ export class stellaParserVisitorImpl implements stellaParserVisitor<void> {
     visitInl(ctx: InlContext): StellaType | undefined {
         const contextType = this.getContextType();
         if (!(contextType instanceof StellaSumType)) {
-            this.addError(new TypecheckError(error_type.ERROR_AMBIGUOUS_SUM_TYPE))
+            this.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_INJECTION))
             return undefined
         } else {
             this.addContextType(contextType.leftType!)
@@ -510,7 +514,7 @@ export class stellaParserVisitorImpl implements stellaParserVisitor<void> {
     visitInr(ctx: InrContext): StellaType | undefined {
         const contextType = this.getContextType();
         if (!(contextType instanceof StellaSumType)) {
-            this.addError(new TypecheckError(error_type.ERROR_AMBIGUOUS_SUM_TYPE))
+            this.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_INJECTION))
             return undefined
         } else {
             this.addContextType(contextType.rightType!)
@@ -1016,6 +1020,9 @@ export class stellaParserVisitorImpl implements stellaParserVisitor<void> {
 
     visitSucc(ctx: SuccContext): StellaType {
         const argType = ctx._n.accept(this)! as StellaType
+        if (!argType) {
+            debugger
+        }
         argType.tryAssignTo(new StellaType("NAT_TYPE"), this)
         return argType
     }
@@ -1054,7 +1061,14 @@ export class stellaParserVisitorImpl implements stellaParserVisitor<void> {
 
     visitTuple(ctx: TupleContext): StellaType {
         debugger
-        return new StellaTuple(ctx._exprs.map(t => t.accept(this)!)); // todo
+        return new StellaTuple(ctx._exprs.map(t => {
+            this.addContextType(undefined)
+            try {
+                return t.accept(this)!
+            } finally {
+                this.dropContextType()
+            }
+        }));
     }
 
     visitTypeAbstraction(ctx: TypeAbstractionContext): void {
@@ -1205,7 +1219,7 @@ export class stellaParserVisitorImpl implements stellaParserVisitor<void> {
         if (ctx._rhs) {
             if (this.getContextType()) {
                 if (!(this.getContextType() instanceof StellaVariant)) {
-                    this.addError(new TypecheckError(error_type.ERROR_AMBIGUOUS_VARIANT_TYPE, ctx._label))
+                    this.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_VARIANT, ctx._label))
                 } else {
                     const patternTypeFromContext = (this.getContextType() as StellaVariant).findTypeByLabel(ctx._label.text!)
                     if (!patternTypeFromContext) {
