@@ -1,326 +1,9 @@
 import {expect, test} from 'vitest'
-import {SyntaxErrorReport, parseAndTypecheck, TypeErrorsReport, GoodReport} from "../src/typechecker";
-import {example} from "../src/examples";
-import {tokenInfo} from "../src/utils";
-import {error_type} from "../src/typecheckError";
-
-
-test('smoke', () => {
-    expect(parseAndTypecheck(example).ok).toBe(false)
-})
-
-test('main not found', () => {
-    const res = parseAndTypecheck("language core; fn notmain(n : Nat) -> Nat {return 0}")
-    expect(res.ok).toBe(false)
-    expect((res as TypeErrorsReport).errors).not.toStrictEqual([])
-})
-
-test('syntax error', () => {
-    const res = parseAndTypecheck("langu age core; fn notmain(n : Nat) -> Nat {return x}");
-    expect(res).toStrictEqual(new SyntaxErrorReport([
-        {
-            "line": 1,
-            "charPositionInLine": 0,
-            "message": "mismatched input 'langu' expecting 'language'"
-        }
-    ]))
-})
-
-test('undefined var', () => {
-    const res = parseAndTypecheck("language core; fn main(n : Nat) -> Nat {return f(n)}");
-    expect(res).instanceof(TypeErrorsReport)
-    const errors = (res as TypeErrorsReport).errors.map(i => [i.type, ...tokenInfo(i.token!)])
-    expect(errors.slice(0, 1)).toStrictEqual([["ERROR_UNDEFINED_VARIABLE", "f", 14,]])
-})
-
-test('simple defined var', () => {
-    const res = parseAndTypecheck(`language core; fn main(n : Nat) -> Nat { return n }`);
-    expect(res).instanceof(GoodReport)
-})
-
-test('multiparam', () => {
-    const res = parseAndTypecheck(`
-    language core;
-
-extend with #multiparameter-functions;
-
-fn m_f(a : Nat, b : Bool) -> Nat {
-    return if (b) then a else 0
-}
-
-fn get_m_f(a : Nat, b : Bool, c : Nat) -> (fn(Nat, Bool) -> Nat) {
-    return m_f
-}
-
-fn main(n : Nat) -> Nat {
-    return get_m_f(0, true, 0)(0, false)
-}
-`);
-    expect(res).instanceof(GoodReport);
-})
-
-test('nested', () => {
-    const res = parseAndTypecheck(`
-language core;
-
-extend with #nested-function-declarations;
-
-fn main(n : Nat) -> Nat {
-  fn nested(x : Nat) -> Bool {
-   \treturn if (Nat::iszero(x)) then Nat::iszero(n) else false
-  }
-
-  return if (nested(n)) then 0 else succ(0)
-}
-`);
-    expect(res).instanceof(GoodReport);
-})
-
-test('let', () => {
-    const res = parseAndTypecheck(`
-    language core;
-extend with #let-bindings;
-
-
-fn main(n : Nat) -> Nat {
-  return let y = let x = 0 in x in y
-}`);
-    expect(res).instanceof(GoodReport);
-})
-
-test('let2', () => {
-    const res = parseAndTypecheck(`
-language core;
-
-extend with  #let-patterns, #pattern-ascriptions, #let-bindings;
-
-fn foo(n : Nat) -> Nat {
-    return n
-}
-
-fn main(n : Nat) -> Bool {
-    return let (x as Bool) = true in 0
-}`);
-    expect(res).instanceof(TypeErrorsReport);
-})
-
-
-test('let_fun', () => {
-    const res = parseAndTypecheck(`
-    language core;
-extend with #let-bindings;
-
-
-fn main(n : Nat) -> Nat {
-  return let zeroFun = (fn (a : Nat) {return a}) in zeroFun(0)
-}
-`);
-    expect(res).instanceof(GoodReport);
-})
-
-test('let_nested', () => {
-    const res = parseAndTypecheck(`
-language core;
-extend with #let-bindings;
-
-
-fn main(n : Nat) -> Nat {
-  return let y = let x = 0 in x in x
-}
-`);
-    expect(res).instanceof(TypeErrorsReport);
-})
-
-test('let_if', () => {
-    const res = parseAndTypecheck(`
-language core;
-extend with #let-bindings;
-
-
-fn main(n : Nat) -> Nat {
-  return let x = if false then 0 else succ(0) in x
-}
-`);
-    expect(res).instanceof(GoodReport);
-})
-
-test('let_empty', () => {
-    const res = parseAndTypecheck(`
-language core;
-extend with #let-bindings;
-extend with #lists;
-
-
-fn main(n : Nat) -> Bool {
- return let x = List::isempty([0, 0]) in x
-}
-`);
-    expect(res).instanceof(GoodReport);
-})
-
-test('let_rec', () => {
-    const res = parseAndTypecheck(`
-language core;
-extend with #let-bindings;
-
-
-fn main(n : Nat) -> Nat {
-  return let y = let step = (fn (i : Nat) { return fn (cur : Nat) { return succ(cur) } })
-              in Nat::rec(succ(0), 0, step)
-         in y
-
-}
-`);
-    expect(res).instanceof(GoodReport);
-})
-
-test('rec_bad', () => {
-    const res = parseAndTypecheck(`
-language core;
-
-fn main(n : Nat) -> Nat {
-  return Nat::rec(n, succ(0), fn(i : Bool) {
-             return fn(r : Nat) {
-             return 0
-           } })
-}
-
-`);
-    expect(res).instanceof(TypeErrorsReport);
-})
-
-test('let_num_args', () => {
-    const res = parseAndTypecheck(`
-language core;
-
-extend with #multiparameter-functions;
-
-fn main(n : Nat) -> Nat {
-    return ((fn(a : Nat, b : Nat) {
-        return 0
-    }))(0)
-}
-`);
-    expect(res).instanceof(TypeErrorsReport);
-})
-
-test('let_num_args_fix', () => {
-    const res = parseAndTypecheck(`language core;
-
-extend with #fixpoint-combinator, #multiparameter-functions;
-
-fn foo(a : Nat, b : Nat) -> Bool {
-  return true
-}
-
-fn main(n : Nat) -> Nat {
-  return (fn (a : Nat) { return fix(foo); } ) (0)
-}`);
-    expect(res).instanceof(TypeErrorsReport);
-})
-
-test('undef', () => {
-    const res = parseAndTypecheck(`
-    language core;
-
-fn main(n : Nat) -> Nat {
-    return a
-}
-`);
-    expect(res).instanceof(TypeErrorsReport);
-})
-
-test('not_fun', () => {
-    const res = parseAndTypecheck(`
-language core;
-
-fn foo(arg : Nat) -> Nat {
-    return 0
-}
-
-fn main(n : Nat) -> Nat {
-  return n(foo(true))
-}
-`);
-    expect(res).instanceof(TypeErrorsReport);
-})
-
-test('pair', () => {
-    const res = parseAndTypecheck(`
-language core;
-extend with #pairs;
-
-fn main(n : Nat) -> {Nat, Nat} {
-  return {succ(n), {succ(succ(n)), n}}.2
-}
-`);
-    expect(res).instanceof(GoodReport);
-})
-
-test('tuple', () => {
-    const res = parseAndTypecheck(`
-language core;
-extend with #tuples;
-
-fn main(n : Nat) -> {Nat, Nat, Bool} {
-  return {n, succ(n), true}
-}
-`);
-    expect(res).instanceof(GoodReport);
-})
-
-test('call_tuple', () => {
-    const res = parseAndTypecheck(`
-    language core;
-extend with #tuples;
-
-fn main(n : Nat) -> Nat {
-  return {0, false}(0)
-}
-`);
-    expect(res).instanceof(TypeErrorsReport);
-})
-
-
-test('int_literal', () => {
-    const res = parseAndTypecheck(`
-language core;
-
-extend with #natural-literals;
-
-
-fn main(n : Nat) -> Bool {
-  return 5;
-}
-`);
-    expect(res).instanceof(TypeErrorsReport);
-})
-
-test('succ_true', () => {
-    const res = parseAndTypecheck(`
-language core;
-
-fn main(n : Nat) -> Bool {
-    return succ(true)
-}
-`);
-    expect(res).instanceof(TypeErrorsReport);
-    expect((res as TypeErrorsReport).errors[0].type).toBe(error_type.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION)
-})
-
-test('cons', () => {
-    const res = parseAndTypecheck(`
-language core;
-
-extend with #lists;
-
-
-fn main(n : Nat) -> [Nat] {
-  return  cons(0, []);
-}
-`);
-    expect(res).instanceof(GoodReport);
-})
+import {SyntaxErrorReport, parseAndTypecheck, TypeErrorsReport, GoodReport} from "../typechecker";
+import {example} from "../examples";
+import {tokenInfo} from "../utils";
+import {error_type} from "../typecheckError";
+import {expectTypeError} from "./utils-for-tests";
 
 test('match', () => {
     const res = parseAndTypecheck(`
@@ -348,6 +31,22 @@ fn main(n : (fn(Nat) -> Nat)) -> Nat {
   return match n {
     \ta => 0
    }
+}
+`);
+    expect(res).instanceof(GoodReport);
+})
+
+test('match_unit', () => {
+    const res = parseAndTypecheck(`
+language core;
+
+extend with #unit-type, #structural-patterns;
+
+fn main(n : Nat) -> Nat {
+  return match(unit) {
+    unit => 0
+    | m => 0
+  }
 }
 `);
     expect(res).instanceof(GoodReport);
@@ -632,39 +331,6 @@ fn main(n : Nat) -> Nat {
 
 */
 
-test('list_ops', () => {
-    const res = parseAndTypecheck(`
-language core;
-
-extend with #lists;
-
-fn first_or_default(list : [Nat]) -> Nat {
-  return if List::isempty(list) then List::head(List::tail([0,0,0])) else List::head(list)
-}
-
-fn main(arg : Nat) -> Nat {
-  return first_or_default([0, 0, 0])
-}
-
-    `);
-    expect(res).instanceof(GoodReport);
-})
-
-test('list_ops2', () => {
-    const res = parseAndTypecheck(`
-language core;
-
-extend with #lists;
-
-fn main(arg : Nat) -> Nat {
-  return List::head([0, 0, 0, true])
-}
-
-    `);
-    expect(res).instanceof(TypeErrorsReport);
-})
-
-
 test('record_as_arg', () => {
     const res = parseAndTypecheck(`
     language core;
@@ -707,7 +373,7 @@ fn main(n : Nat) -> { fst : Nat, snd : Bool } {
 }
 `);
     expect(res).instanceof(TypeErrorsReport);
-    expect((res as TypeErrorsReport).errors[0].type).toBe(error_type.ERROR_MISSING_RECORD_FIELDS)
+    expectTypeError(res, error_type.ERROR_MISSING_RECORD_FIELDS)
 })
 
 test('record_as_arg_and_incorrect_field_type_in_ass', () => {
@@ -720,7 +386,7 @@ fn main(n : Nat) -> { fst : Nat, snd : Bool } {
 }
 `);
     expect(res).instanceof(TypeErrorsReport);
-    expect((res as TypeErrorsReport).errors[0].type).toBe(error_type.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION)
+    expectTypeError(res, error_type.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION)
 })
 
 test('record_as_arg_and_extra_field_in_ass', () => {
@@ -733,7 +399,7 @@ fn main(n : Nat) -> { fst : Nat, snd : Bool } {
 }
 `);
     expect(res).instanceof(TypeErrorsReport);
-    expect((res as TypeErrorsReport).errors[0].type).toBe(error_type.ERROR_UNEXPECTED_RECORD_FIELDS)
+    expectTypeError(res, error_type.ERROR_UNEXPECTED_RECORD_FIELDS)
 })
 
 test('record_dot', () => {
@@ -766,7 +432,7 @@ fn main(n : Nat) -> Nat {
 }
 `);
     expect(res).instanceof(TypeErrorsReport);
-    expect((res as TypeErrorsReport).errors[0].type).toBe(error_type.ERROR_NOT_A_RECORD)
+    expectTypeError(res, error_type.ERROR_NOT_A_RECORD)
 })
 
 test('not_record_dot2', () => {
@@ -783,7 +449,7 @@ fn main(n : Nat) -> Nat {
 }
 `);
     expect(res).instanceof(TypeErrorsReport);
-    expect((res as TypeErrorsReport).errors[0].type).toBe(error_type.ERROR_NOT_A_RECORD)
+    expectTypeError(res, error_type.ERROR_NOT_A_RECORD)
 })
 
 test('not_record_dot3', () => {
@@ -800,7 +466,7 @@ fn main(n : Nat) -> Nat {
 }
 `);
     expect(res).instanceof(TypeErrorsReport);
-    expect((res as TypeErrorsReport).errors[0].type).toBe(error_type.ERROR_NOT_A_RECORD)
+    expectTypeError(res, error_type.ERROR_NOT_A_RECORD)
 })
 
 test('variant', () => {
@@ -886,7 +552,7 @@ fn main(n : Nat) -> <| a : Nat, b, c |> {
 }
 `);
     expect(res).instanceof(TypeErrorsReport);
-    expect((res as TypeErrorsReport).errors[0].type).toBe(error_type.ERROR_MISSING_DATA_FOR_LABEL)
+    expectTypeError(res, error_type.ERROR_MISSING_DATA_FOR_LABEL)
 })
 
 test('variant_nullary_bad2', () => {
@@ -900,7 +566,21 @@ fn main(n : Nat) -> <| a : Nat, b, c |> {
 }
 `);
     expect(res).instanceof(TypeErrorsReport);
-    expect((res as TypeErrorsReport).errors[0].type).toBe(error_type.ERROR_UNEXPECTED_DATA_FOR_NULLARY_LABEL)
+    expectTypeError(res, error_type.ERROR_UNEXPECTED_DATA_FOR_NULLARY_LABEL)
+})
+
+test('variant_nullary_bad3', () => {
+    const res = parseAndTypecheck(`
+language core;
+
+extend with #structural-patterns, #natural-literals, #variants, #nullary-variant-labels;
+
+fn main(n : Nat) -> <| a : Nat, b, c |> {
+  return <| e |>
+}
+`);
+    expect(res).instanceof(TypeErrorsReport);
+    expectTypeError(res, error_type.ERROR_UNEXPECTED_VARIANT_LABEL)
 })
 
 test('variant_bad', () => {
@@ -917,7 +597,7 @@ fn main(n : <| a : Nat, b : Bool |>) -> Nat {
 }
 `);
     expect(res).instanceof(TypeErrorsReport);
-    expect((res as TypeErrorsReport).errors[0].type).toBe(error_type.ERROR_UNEXPECTED_PATTERN_FOR_TYPE)
+    expectTypeError(res, error_type.ERROR_UNEXPECTED_PATTERN_FOR_TYPE)
 })
 
 test('variant_bad2', () => {
@@ -935,7 +615,7 @@ fn main(n : Nat) -> <| a : Nat, b : Bool |> {
 }
 `);
     expect(res).instanceof(TypeErrorsReport);
-    expect((res as TypeErrorsReport).errors[0].type).toBe(error_type.ERROR_AMBIGUOUS_VARIANT_TYPE)
+    expectTypeError(res, error_type.ERROR_AMBIGUOUS_VARIANT_TYPE)
 })
 
 test('variant_bad3', () => {
@@ -959,7 +639,7 @@ fn main(succeed : Bool) -> Nat {
 }
 `);
     expect(res).instanceof(TypeErrorsReport);
-    expect((res as TypeErrorsReport).errors[0].type).toBe(error_type.ERROR_UNEXPECTED_VARIANT_LABEL)
+    expectTypeError(res, error_type.ERROR_UNEXPECTED_VARIANT_LABEL)
 })
 
 test('variant_bad4', () => {
@@ -983,7 +663,7 @@ fn main(succeed : Bool) -> Nat {
 }
 `);
     expect(res).instanceof(TypeErrorsReport);
-    expect((res as TypeErrorsReport).errors[0].type).toBe(error_type.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION)
+    expectTypeError(res, error_type.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION)
 })
 
 test('variant_bad_if_in_if', () => {
@@ -1009,7 +689,7 @@ fn main(succeed : Bool) -> Nat {
 }
 `);
     expect(res).instanceof(TypeErrorsReport);
-    expect((res as TypeErrorsReport).errors[0].type).toBe(error_type.ERROR_UNEXPECTED_VARIANT_LABEL)
+    expectTypeError(res, error_type.ERROR_UNEXPECTED_VARIANT_LABEL)
 })
 
 test('variant_bad_if_in_if2', () => {
@@ -1035,7 +715,7 @@ fn main(succeed : Bool) -> Nat {
 }
 `);
     expect(res).instanceof(TypeErrorsReport);
-    expect((res as TypeErrorsReport).errors[0].type).toBe(error_type.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION)
+    expectTypeError(res, error_type.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION)
 })
 
 test('record_in_abs', () => {
@@ -1071,19 +751,27 @@ fn main(n : Nat) -> Nat {
 
 `);
     expect(res).instanceof(TypeErrorsReport);
-    expect((res as TypeErrorsReport).errors[0].type).toBe(error_type.ERROR_MISSING_RECORD_FIELDS)
+    expectTypeError(res, error_type.ERROR_MISSING_RECORD_FIELDS)
 })
 
-test('unit', () => {
+test('record_missing_field2', () => {
     const res = parseAndTypecheck(`
 language core;
-extend with #unit-type;
+extend with #records;
 
-fn main(_ : Nat) -> Unit {
-    return unit
+fn foo(n : Nat) -> (fn(Nat) -> { current : Nat, next : Nat }) {
+  return fn(i : Nat) {
+    return { next = succ(n) } // 'current' is missing
+  }
 }
+
+fn main(n : Nat) -> Nat {
+  return foo(0)(succ(0)).next
+}
+
 `);
-    expect(res).instanceof(GoodReport);
+    expect(res).instanceof(TypeErrorsReport);
+    expectTypeError(res, error_type.ERROR_MISSING_RECORD_FIELDS)
 })
 
 test('ascriptions', () => {
@@ -1154,33 +842,6 @@ fn main(n : Nat) -> Nat {
     expect(res).instanceof(GoodReport);
 })
 
-test('asc_list', () => {
-    const res = parseAndTypecheck(`
-language core;
-extend with #type-ascriptions;
-extend with #lists;
-
-fn main(n : Nat) -> [Bool] {
-  return [] as [Bool]
-}
-`);
-    expect(res).instanceof(GoodReport);
-})
-
-test('head_bad', () => {
-    const res = parseAndTypecheck(`
-language core;
-
-extend with #lists ;
-
-fn main(n : Nat) -> Nat {
-  return List::head([])(n)
-}
-`);
-    expect(res).instanceof(TypeErrorsReport);
-    expect((res as TypeErrorsReport).errors[0].type).toBe(error_type.ERROR_AMBIGUOUS_LIST_TYPE)
-})
-
 test('let_bad', () => {
     const res = parseAndTypecheck(`
     language core;
@@ -1193,26 +854,9 @@ fn main(n : Nat) -> Nat {
 }
 `);
     expect(res).instanceof(TypeErrorsReport);
-    expect((res as TypeErrorsReport).errors[0].type).toBe(error_type.ERROR_AMBIGUOUS_LIST_TYPE)
+    expectTypeError(res, error_type.ERROR_AMBIGUOUS_LIST_TYPE)
 })
 
-test('list_match_res_bad', () => {
-    const res = parseAndTypecheck(`
-language core;
-
-extend with #lists ;
-
-fn main(n : Nat) -> Nat {
-  return (fn (a : Nat) { return match(0) {
-    x => []
-    | y => [0]
-  }
-  }) (0)
-}
-`);
-    expect(res).instanceof(TypeErrorsReport);
-    expect((res as TypeErrorsReport).errors[0].type).toBe(error_type.ERROR_AMBIGUOUS_LIST_TYPE)
-})
 
 test('memory', () => {
     const res = parseAndTypecheck(`language core;

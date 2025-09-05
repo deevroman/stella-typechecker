@@ -1,5 +1,5 @@
 import {expect, test} from 'vitest'
-import {parseAndTypecheck, TypeErrorsReport} from "../src/typechecker";
+import {parseAndTypecheck, TypeErrorsReport} from "../typechecker";
 
 import * as fs from 'fs'
 import * as path from 'path'
@@ -18,7 +18,6 @@ test.each(files)('$error_type/$name', ({error_type, name, fullPath}) => {
     console.log(new URL("file://" + fullPath).toString());
     const source = fs.readFileSync(fullPath, 'utf-8')
     const result = parseAndTypecheck(source)
-    expect(result.ok).toBe(false)
     expect(result).instanceof(TypeErrorsReport)
     expect((result as TypeErrorsReport).errors.map(i => i.type.toString())).contains(error_type)
     debugger

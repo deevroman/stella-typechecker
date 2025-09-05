@@ -1,5 +1,5 @@
 import {expect, test} from 'vitest'
-import {parseAndTypecheck} from "../src/typechecker";
+import {parseAndTypecheck} from "../typechecker";
 
 import * as fs from 'fs'
 import * as path from 'path'
