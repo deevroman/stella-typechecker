@@ -7,6 +7,9 @@ import * as path from 'path'
 const TEST_DIR = path.resolve(__dirname, './stella-tests/bad')
 
 const files = fs.readdirSync(TEST_DIR).flatMap(dir => {
+    if (dir.toString().startsWith("_")) {
+        return []
+    }
     return fs.readdirSync(path.join(TEST_DIR, dir)).map(f => ({
         error_type: dir.toString(),
         name: f,

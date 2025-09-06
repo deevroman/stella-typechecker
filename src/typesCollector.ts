@@ -51,7 +51,7 @@ export class TypesCollector {
 
     static extractFunctionTypes(fn: DeclFunContext): StellaFunction {
         const args = TypesCollector.extractArgs(fn);
-        const typeVisitor = new stellaParserVisitorImpl([])
+        const typeVisitor = new stellaParserVisitorImpl()
         return new StellaFunction(
             args.map(i => i.type.accept(typeVisitor)),
             fn.stellatype()[0].accept(typeVisitor)!

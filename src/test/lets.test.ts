@@ -232,3 +232,16 @@ fn main(n : Nat) -> Nat + Bool {
 `);
     expect(res).instanceof(GoodReport);
 })
+
+test('cast', () => {
+    const res = parseAndTypecheck(`
+language core;
+
+extend with #natural-literals, #type-cast, #pairs, #top-type, #structural-subtyping;
+
+fn main(n : Nat) -> Nat {
+  return (1 cast as {Nat, Nat}).1
+}
+`);
+    expect(res).instanceof(GoodReport);
+})

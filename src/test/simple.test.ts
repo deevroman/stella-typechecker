@@ -105,6 +105,18 @@ fn main(n : Nat) -> Nat {
     expectTypeError(res, error_type.ERROR_NOT_A_FUNCTION)
 })
 
+test('not_fun2', () => {
+    const res = parseAndTypecheck(`
+language core;
+
+fn main(n : Nat) -> Nat {
+  return (0) (0)
+}
+`);
+    expectTypeError(res, error_type.ERROR_NOT_A_FUNCTION)
+})
+
+
 
 test('int_literal', () => {
     const res = parseAndTypecheck(`

@@ -276,7 +276,7 @@ fn main(n : Nat) -> Nat {
   return foo({ fst = 0, snd = true, thd = true })
 }
 `);
-    expect(res).instanceof(TypeErrorsReport);
+    expectTypeError(res, error_type.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION)
 })
 
 test('record_as_arg_and_missing_field_in_ass', () => {
@@ -417,7 +417,6 @@ fn main(n : Nat) -> Nat {
 }
 
 `);
-    expect(res).instanceof(TypeErrorsReport);
     expectTypeError(res, error_type.ERROR_MISSING_RECORD_FIELDS)
 })
 

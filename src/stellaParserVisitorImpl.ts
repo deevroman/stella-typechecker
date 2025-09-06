@@ -123,17 +123,20 @@ import {ErrorNode, ParseTree, RuleNode} from "antlr4ts/tree";
 import {TerminalNode} from "antlr4ts/tree/TerminalNode";
 import {error_type, TypecheckError} from "./typecheckError";
 import {
-    StellaEntityRecord, StellaEntityVariant,
+    StellaBot,
+    StellaEntityRecord,
+    StellaEntityVariant,
     StellaFunction,
     StellaList,
-    StellaRecord, StellaRef,
-    StellaSumType, StellaTuple,
-    StellaType, StellaVariant
+    StellaRecord,
+    StellaRef,
+    StellaSumType,
+    StellaTop,
+    StellaTuple,
+    StellaType,
+    StellaVariant
 } from "./typecheckTypes";
-import {TypesCollector} from "./typesCollector";
 import {addFunctionsToScope, findAllFunctions, makeFunctionsMap} from "./typechecker";
-import {Token} from "antlr4ts/Token";
-import {CommonToken} from "antlr4ts";
 
 export class stellaParserVisitorImpl implements stellaParserVisitor<void> {
     scopes: { [p: string]: StellaType | undefined }[] = [{}];
@@ -141,9 +144,18 @@ export class stellaParserVisitorImpl implements stellaParserVisitor<void> {
     type_errors: TypecheckError[] = [];
     patternType: StellaType[] = [];
     contextType: (StellaType | undefined)[] = [];
+    subtypingEnabled: boolean = false;
+    exceptionType: StellaType | undefined;
+    ambiguousTypeAsBottom: boolean = false;
 
-    constructor(extensions: string[]) {
+    constructor(extensions: string[] = []) {
         this.extensions = extensions;
+        if (extensions.includes("structural-subtyping")) {
+            this.subtypingEnabled = true;
+        }
+        if (extensions.includes("ambiguous-type-as-bottom")) {
+            this.ambiguousTypeAsBottom = true;
+        }
         this.scopes = [{
             "List:head": new StellaFunction([new StellaList()], new StellaType()),
             "List:tail": new StellaFunction([new StellaList()], new StellaType()),
@@ -247,15 +259,10 @@ export class stellaParserVisitorImpl implements stellaParserVisitor<void> {
                     this.addError(new TypecheckError(error_type.ERROR_INCORRECT_NUMBER_OF_ARGUMENTS, funToken));
                 } else {
                     for (let i = 0; i < type.argsTypes.length; i++) {
-                        this.addContextType(type.argsTypes[i])
-                        const argType = ctx._args[i].accept(this)! as StellaType
-                        if (!argType.isEqualType(type.argsTypes[i])) {
-                            if (argType.type === "RECORD_TYPE" && type.argsTypes[i].type === "RECORD_TYPE") {
-                                this.addError(new TypecheckError(error_type.ERROR_MISSING_RECORD_FIELDS, funToken)); // todo
-                            } else {
-                                this.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION, funToken)); // todo
-                            }
-                        }
+                        const expectedArgumentType = type.argsTypes[i]
+                        this.addContextType(expectedArgumentType)
+                        const argType = ctx._args[i].accept(this) as StellaType | undefined
+                        argType?.tryAssignTo(expectedArgumentType, this)
                         this.dropContextType()
                     }
                 }
@@ -268,8 +275,15 @@ export class stellaParserVisitorImpl implements stellaParserVisitor<void> {
                 this.addError(new TypecheckError(error_type.ERROR_NOT_A_FUNCTION, funToken));
             }
         } else if (ctx._fun instanceof ParenthesisedExprContext) {
-            const fun = ctx._fun.accept(this) as StellaFunction // todo
-            if (ctx._args.length !== fun.argsTypes?.length) {
+            this.addContextType(undefined)
+            const fun = ctx._fun.accept(this)
+            this.dropContextType()
+            if (!fun) {
+                return
+            }
+            if (!(fun instanceof StellaFunction)) {
+                this.addError(new TypecheckError(error_type.ERROR_NOT_A_FUNCTION));
+            } else if (ctx._args.length !== fun.argsTypes?.length) {
                 this.addError(new TypecheckError(error_type.ERROR_INCORRECT_NUMBER_OF_ARGUMENTS));
             }
             return fun.returnType;
@@ -318,12 +332,16 @@ export class stellaParserVisitorImpl implements stellaParserVisitor<void> {
     }
 
     visitConstInt(ctx: ConstIntContext): StellaType {
-        return new StellaType("NAT_TYPE").addValue(ctx._n.text!, true) // todo
+        return new StellaType("NAT_TYPE").addValue(ctx._n.text!, true)
     }
 
-    visitConstMemory(ctx: ConstMemoryContext): void {
-        debugger;
-        return undefined;
+    visitConstMemory(ctx: ConstMemoryContext): StellaType | undefined {
+        const contextType = this.getContextType();
+        if (contextType) {
+            return new StellaRef(new StellaType("_VOID_REF_TYPE")).addAddr(ctx._mem.text!);
+        } else {
+            this.addError(new TypecheckError(error_type.ERROR_AMBIGUOUS_REFERENCE_TYPE))
+        }
     }
 
     visitConstTrue(ctx: ConstTrueContext): StellaType {
@@ -374,11 +392,13 @@ export class stellaParserVisitorImpl implements stellaParserVisitor<void> {
     }
 
     visitDeref(ctx: DerefContext): StellaType | undefined {
+        this.addContextType(new StellaRef(this.getContextType()))
         const type = ctx._expr_.accept(this)! as StellaType
+        this.dropContextType()
         if (type instanceof StellaRef) {
             return type.genericType
         } else {
-            this.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION))
+            this.addError(new TypecheckError(error_type.ERROR_NOT_A_REFERENCE))
         }
     }
 
@@ -490,18 +510,39 @@ export class stellaParserVisitorImpl implements stellaParserVisitor<void> {
         thenType?.tryAssignTo(typeFromContext, this)
         elseType?.tryAssignTo(typeFromContext, this)
 
+        if (typeFromContext instanceof StellaRef) {
+            return typeFromContext
+        }
         return thenType; // fixme
     }
 
     visitInl(ctx: InlContext): StellaType | undefined {
         const contextType = this.getContextType();
-        if (!(contextType instanceof StellaSumType)) {
+        if (!contextType) {
+            if (this.ambiguousTypeAsBottom) {
+                this.addContextType(undefined)
+                const type = this.visitExpr(ctx._expr_);
+                this.dropContextType()
+                if (type) {
+                    return new StellaSumType(type, new StellaBot())
+                }
+            } else {
+                this.addError(new TypecheckError(error_type.ERROR_AMBIGUOUS_SUM_TYPE))
+            }
+        } else if (!(contextType instanceof StellaSumType)) {
             this.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_INJECTION))
             return undefined
         } else {
             this.addContextType(contextType.leftType!)
-            this.visitExpr(ctx._expr_)
+            const type = this.visitExpr(ctx._expr_)
             this.dropContextType()
+            if (contextType.leftType) {
+                if (type) {
+                    type.tryAssignTo(contextType.leftType, this)
+                } else {
+                    this.addError(new TypecheckError(error_type.ERROR_AMBIGUOUS_SUM_TYPE))
+                }
+            }
             return contextType
         }
     }
@@ -513,13 +554,31 @@ export class stellaParserVisitorImpl implements stellaParserVisitor<void> {
 
     visitInr(ctx: InrContext): StellaType | undefined {
         const contextType = this.getContextType();
-        if (!(contextType instanceof StellaSumType)) {
+        if (!contextType) {
+            if (this.ambiguousTypeAsBottom) {
+                this.addContextType(undefined)
+                const type = this.visitExpr(ctx._expr_);
+                this.dropContextType()
+                if (type) {
+                    return new StellaSumType(new StellaBot(), type)
+                }
+            } else {
+                this.addError(new TypecheckError(error_type.ERROR_AMBIGUOUS_SUM_TYPE))
+            }
+        } else if (!(contextType instanceof StellaSumType)) {
             this.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_INJECTION))
             return undefined
         } else {
             this.addContextType(contextType.rightType!)
-            this.visitExpr(ctx._expr_);
+            const type = this.visitExpr(ctx._expr_);
             this.dropContextType()
+            if (contextType.rightType) {
+                if (type) {
+                    type.tryAssignTo(contextType.rightType, this)
+                } else {
+                    this.addError(new TypecheckError(error_type.ERROR_AMBIGUOUS_SUM_TYPE))
+                }
+            }
             return contextType
         }
     }
@@ -592,7 +651,9 @@ export class stellaParserVisitorImpl implements stellaParserVisitor<void> {
 
     visitLetRec(ctx: LetRecContext): StellaType | void {
         this.openScope()
+        this.addContextType(undefined)
         this.visitPatternBinding(ctx._patternBinding)
+        this.dropContextType()
         const res = this.visitExpr(ctx._body)
         this.closeScope()
         return res
@@ -751,9 +812,18 @@ export class stellaParserVisitorImpl implements stellaParserVisitor<void> {
         return new StellaType("BOOL_TYPE");
     }
 
-    visitPanic(ctx: PanicContext): void {
-        debugger;
-        return undefined;
+    visitPanic(ctx: PanicContext): StellaType | undefined {
+        debugger
+        const contextType = this.getContextType()
+        if (contextType) {
+            return contextType
+        } else {
+            if (this.ambiguousTypeAsBottom) {
+                return new StellaBot()
+            } else {
+                this.addError(new TypecheckError(error_type.ERROR_AMBIGUOUS_PANIC_TYPE))
+            }
+        }
     }
 
     visitParamDecl(ctx: ParamDeclContext): StellaType | undefined {
@@ -1039,9 +1109,20 @@ export class stellaParserVisitorImpl implements stellaParserVisitor<void> {
         return ctx._expr_.accept(this);
     }
 
-    visitThrow(ctx: ThrowContext): void {
-        debugger;
-        return undefined;
+    visitThrow(ctx: ThrowContext): StellaType | undefined {
+        const type = ctx._expr_.accept(this) as StellaType | undefined;
+        if (!this.exceptionType) {
+            this.addError(new TypecheckError(error_type.ERROR_EXCEPTION_TYPE_NOT_DECLARED))
+        } else {
+            type?.tryAssignTo(this.exceptionType, this)
+        }
+        if (this.ambiguousTypeAsBottom) {
+            return new StellaBot()
+        } else {
+            if (!this.getContextType()) {
+                this.addError(new TypecheckError(error_type.ERROR_AMBIGUOUS_THROW_TYPE))
+            }
+        }
     }
 
     visitTryCastAs(ctx: TryCastAsContext): void {
@@ -1106,14 +1187,13 @@ export class stellaParserVisitorImpl implements stellaParserVisitor<void> {
         return new StellaType("BOOL_TYPE")
     }
 
-    visitTypeBottom(ctx: TypeBottomContext): void {
-        debugger;
-        return undefined;
+    visitTypeBottom(ctx: TypeBottomContext): StellaType {
+        return new StellaBot();
     }
 
     visitTypeCast(ctx: TypeCastContext): void {
-        debugger;
-        return undefined;
+        const exprType = ctx._expr_.accept(this)
+        return ctx._type_.accept(this);
     }
 
     visitTypeForAll(ctx: TypeForAllContext): void {
@@ -1163,9 +1243,8 @@ export class stellaParserVisitorImpl implements stellaParserVisitor<void> {
         return new StellaSumType(ctx._left.accept(this)! as StellaType, ctx._right.accept(this)! as StellaType)
     }
 
-    visitTypeTop(ctx: TypeTopContext): void {
-        debugger;
-        return undefined;
+    visitTypeTop(ctx: TypeTopContext): StellaType {
+        return new StellaTop();
     }
 
     visitTypeTuple(ctx: TypeTupleContext): StellaType {

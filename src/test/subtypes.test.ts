@@ -1,0 +1,102 @@
+import {expect, test} from 'vitest'
+import {GoodReport, parseAndTypecheck} from "../typechecker";
+import {error_type} from "../typecheckError";
+import {expectTypeError} from "./utils-for-tests";
+
+
+test('top_and_tuple', () => {
+    const res = parseAndTypecheck(`
+language core;
+
+extend with #tuples,
+            #natural-literals,
+            #top-type,
+            #bottom-type,
+            #structural-subtyping;
+
+fn tuple_gen(n : Nat) -> {Top, Bool, Nat} {
+  return {1, true, 12}
+}
+
+
+fn main(n : Nat) -> {Top, Bool} {
+  return tuple_gen(n)
+}
+`);
+    expectTypeError(res, error_type.ERROR_UNEXPECTED_TUPLE_LENGTH);
+})
+
+test('top_in_function_arg', () => {
+    const res = parseAndTypecheck(`
+language core;
+
+extend with #natural-literals,
+            #top-type,
+            #bottom-type,
+            #structural-subtyping;
+
+fn kek( x : Top ) -> Top {
+  return x;
+}
+
+fn main(b : Bool) -> (fn(Top) -> Top) {
+    return kek;
+}
+`);
+    expect(res).instanceof(GoodReport)
+})
+
+test('top_in_function_arg2', () => {
+    const res = parseAndTypecheck(`
+language core;
+
+extend with #natural-literals,
+            #top-type,
+            #bottom-type,
+            #structural-subtyping;
+
+fn kek( x : Top ) -> Bool {
+  return false;
+}
+
+fn main(b : Bool) -> (fn(Top) -> Top) {
+    return kek;
+}
+`);
+    expect(res).instanceof(GoodReport)
+})
+
+test('top_in_function_arg_bad', () => {
+    const res = parseAndTypecheck(`
+language core;
+
+extend with #natural-literals,
+            #top-type,
+            #bottom-type,
+            #structural-subtyping;
+
+fn main(b : Bool) -> (fn(Top) -> Top) {
+    return fn(x : Bool) {
+        return false
+    }
+}
+`);
+    expectTypeError(res, error_type.ERROR_UNEXPECTED_SUBTYPE);
+})
+
+test('records_subtyping', () => {
+    const res = parseAndTypecheck(`
+language core;
+
+extend with #records,
+            #natural-literals,
+            #top-type,
+            #bottom-type,
+            #structural-subtyping;
+
+fn main(n : Nat) -> { one : Nat } {
+  return { one = 1, two = succ(succ(0)) }
+}
+`);
+    expect(res).instanceof(GoodReport)
+})

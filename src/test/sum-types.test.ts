@@ -116,3 +116,44 @@ fn main(input : Bool) -> Nat {
     expect(res).instanceof(TypeErrorsReport);
     expectTypeError(res, error_type.ERROR_UNEXPECTED_INJECTION)
 })
+
+test('sum_type_bad_inr2', () => {
+    const res = parseAndTypecheck(`
+language core;
+
+extend with #sum-types,
+            #natural-literals;
+
+fn main(n : Nat) -> Nat + Bool {
+  return inr(12)
+}
+    `);
+    expect(res).instanceof(TypeErrorsReport);
+    expectTypeError(res, error_type.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION)
+})
+
+test('sum_type_with_bot_inr', () => {
+    const res = parseAndTypecheck(`
+language core;
+extend with #ambiguous-type-as-bottom, #structural-subtyping, #sum-types;
+fn main(n : Nat) -> Bool + Nat {
+  return (fn (x : Nat) {
+    return inr(x)
+  })(n)
+}
+    `);
+    expect(res).instanceof(GoodReport);
+})
+
+test('sum_type_with_bot_inl', () => {
+    const res = parseAndTypecheck(`
+language core;
+extend with #ambiguous-type-as-bottom, #structural-subtyping, #sum-types;
+fn main(n : Nat) -> Nat + Bool {
+  return (fn (x : Nat) {
+    return inl(x)
+  })(n)
+}
+    `);
+    expect(res).instanceof(GoodReport);
+})

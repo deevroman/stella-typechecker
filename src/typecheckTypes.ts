@@ -1,5 +1,6 @@
 import {stellaParserVisitorImpl} from "./stellaParserVisitorImpl";
 import {error_type, TypecheckError} from "./typecheckError";
+import {a} from "vitest/dist/chunks/suite.d.FvehnV49";
 
 type StellaTypeEnum =
     "UNIT_TYPE" |
@@ -16,15 +17,24 @@ type StellaTypeEnum =
     "VARIANT_TYPE" |
     "FUNCTION_TYPE" |
     "REF_TYPE" |
-    "ANY_TYPE";
+    "_VOID_REF_TYPE" |
+    "ANY_TYPE" |
+    "TOP_TYPE" |
+    "BOT_TYPE";
 
 export class StellaType {
     type: StellaTypeEnum = "UNIT_TYPE";
     value: string | undefined = undefined;
     isEqualValue: boolean = true;
+    addr: string = "";
 
     constructor(type: StellaTypeEnum = "UNIT_TYPE") {
         this.type = type;
+    }
+
+    addAddr(addr: string) : StellaType {
+        this.addr = addr;
+        return this;
     }
 
     addValue(value: string, isEqualValue: boolean) {
@@ -38,8 +48,18 @@ export class StellaType {
     }
 
     tryAssignTo(oth: StellaType, ctx: stellaParserVisitorImpl): void {
+        if (ctx.subtypingEnabled && oth instanceof StellaTop) {
+            return
+        }
+        if (ctx.subtypingEnabled && oth instanceof StellaBot) {
+            ctx.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_SUBTYPE))
+        }
         if (this.type !== oth.type) {
-            ctx.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION))
+            if (ctx.subtypingEnabled) {
+                ctx.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_SUBTYPE))
+            } else {
+                ctx.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION))
+            }
         }
     }
 }
@@ -73,6 +93,12 @@ export class StellaFunction extends StellaType {
 
 
     tryAssignTo(oth: StellaType, ctx: stellaParserVisitorImpl): void {
+        if (ctx.subtypingEnabled && oth instanceof StellaTop) {
+            return
+        }
+        if (ctx.subtypingEnabled && oth instanceof StellaBot) {
+            ctx.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_SUBTYPE))
+        }
         if (!(oth instanceof StellaFunction)) {
             ctx.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION))
             return
@@ -82,7 +108,7 @@ export class StellaFunction extends StellaType {
             return;
         }
         for (let i = 0; i < this.argsTypes.length; i++) {
-            this.argsTypes[i].tryAssignTo(oth.argsTypes[i], ctx)
+            oth.argsTypes[i].tryAssignTo(this.argsTypes[i], ctx)
         }
         this.returnType.tryAssignTo(oth.returnType, ctx)
     }
@@ -109,6 +135,12 @@ export class StellaList extends StellaType {
     }
 
     tryAssignTo(oth: StellaType, ctx: stellaParserVisitorImpl) {
+        if (ctx.subtypingEnabled && oth instanceof StellaTop) {
+            return
+        }
+        if (ctx.subtypingEnabled && oth instanceof StellaBot) {
+            ctx.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_SUBTYPE))
+        }
         if (!(oth instanceof StellaList)) {
             ctx.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_LIST))
             return
@@ -128,7 +160,6 @@ export class StellaRef extends StellaType {
         this.genericType = genericType;
     }
 
-
     isEqualType(oth: StellaType | undefined): boolean {
         if (!super.isEqualType(oth)) {
             return false;
@@ -137,12 +168,19 @@ export class StellaRef extends StellaType {
     }
 
     tryAssignTo(oth: StellaType, ctx: stellaParserVisitorImpl) {
-        if (!(oth instanceof StellaRef)) {
-            // fixme type
-            ctx.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION))
+        if (ctx.subtypingEnabled && oth instanceof StellaTop) {
             return
         }
-        this.genericType.tryAssignTo(oth.genericType, ctx)
+        if (ctx.subtypingEnabled && oth instanceof StellaBot) {
+            ctx.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_SUBTYPE))
+        }
+        if (!(oth instanceof StellaRef)) {
+            ctx.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_REFERENCE))
+            return
+        }
+        if (this.genericType.type !== "_VOID_REF_TYPE") {
+            this.genericType.tryAssignTo(oth.genericType, ctx)
+        }
     }
 }
 
@@ -165,15 +203,20 @@ export class StellaSumType extends StellaType {
     }
 
     tryAssignTo(oth: StellaType, ctx: stellaParserVisitorImpl) {
+        if (ctx.subtypingEnabled && oth instanceof StellaTop) {
+            return
+        }
+        if (ctx.subtypingEnabled && oth instanceof StellaBot) {
+            ctx.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_SUBTYPE))
+        }
         if (!(oth instanceof StellaSumType)) {
-            ctx.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_INJECTION))
+            ctx.addError(new TypecheckError(error_type.ERROR_AMBIGUOUS_SUM_TYPE))
             return
         }
         this.leftType!.tryAssignTo(oth.leftType!, ctx)
         this.rightType!.tryAssignTo(oth.rightType!, ctx)
     }
 }
-
 
 export class StellaTuple extends StellaType {
     type: StellaTypeEnum = "TUPLE_TYPE";
@@ -201,6 +244,12 @@ export class StellaTuple extends StellaType {
     }
 
     tryAssignTo(oth: StellaType, ctx: stellaParserVisitorImpl) {
+        if (ctx.subtypingEnabled && oth instanceof StellaTop) {
+            return
+        }
+        if (ctx.subtypingEnabled && oth instanceof StellaBot) {
+            ctx.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_SUBTYPE))
+        }
         if (!(oth instanceof StellaTuple)) {
             ctx.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_TUPLE))
             return
@@ -263,6 +312,12 @@ export class StellaRecord extends StellaType {
     }
 
     tryAssignTo(oth: StellaType, ctx: stellaParserVisitorImpl): void {
+        if (ctx.subtypingEnabled && oth instanceof StellaTop) {
+            return
+        }
+        if (ctx.subtypingEnabled && oth instanceof StellaBot) {
+            ctx.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_SUBTYPE))
+        }
         if (!(oth instanceof StellaRecord)) {
             ctx.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_RECORD))
             return
@@ -270,7 +325,9 @@ export class StellaRecord extends StellaType {
         for (let [label, valueType] of Object.entries(this.entities)) {
             const valueTypeFromContext = oth.entities[label]
             if (!valueTypeFromContext) {
-                ctx.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_RECORD_FIELDS))
+                if (!ctx.subtypingEnabled) {
+                    ctx.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_RECORD_FIELDS))
+                }
             } else {
                 valueType.tryAssignTo(valueTypeFromContext, ctx)
             }
@@ -301,7 +358,7 @@ export class StellaVariant extends StellaType {
     type: StellaTypeEnum = "VARIANT_TYPE";
     entities: [string, StellaType][] = []
 
-    private readonly entitiesIndex: {[label: string]: StellaType} = {}
+    private readonly entitiesIndex: { [label: string]: StellaType } = {}
 
     constructor(entities: StellaEntityVariant[]) {
         super();
@@ -331,6 +388,12 @@ export class StellaVariant extends StellaType {
     }
 
     tryAssignTo(oth: StellaType, ctx: stellaParserVisitorImpl): void {
+        if (ctx.subtypingEnabled && oth instanceof StellaTop) {
+            return
+        }
+        if (ctx.subtypingEnabled && oth instanceof StellaBot) {
+            ctx.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_SUBTYPE))
+        }
         if (!(oth instanceof StellaVariant)) {
             ctx.addError(new TypecheckError(error_type.ERROR_AMBIGUOUS_VARIANT_TYPE))
             return
@@ -356,7 +419,34 @@ export class StellaVariant extends StellaType {
         }
     }
 
-    findTypeByLabel(label: string) : StellaType | undefined {
+    findTypeByLabel(label: string): StellaType | undefined {
         return this.entitiesIndex[label]
+    }
+}
+
+export class StellaTop extends StellaType {
+    type: StellaTypeEnum = "TOP_TYPE";
+
+    constructor() {
+        super();
+    }
+
+    tryAssignTo(oth: StellaType, ctx: stellaParserVisitorImpl): void {
+        if (oth instanceof StellaTop) {
+            return
+        }
+        ctx.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_SUBTYPE))
+    }
+}
+
+export class StellaBot extends StellaType {
+    type: StellaTypeEnum = "BOT_TYPE";
+
+    constructor() {
+        super();
+    }
+
+    tryAssignTo(oth: StellaType, ctx: stellaParserVisitorImpl): void {
+        return;
     }
 }

@@ -27,3 +27,89 @@ fn main(n : Nat) -> Nat {
 }`);
     expect(res).instanceof(GoodReport);
 })
+
+
+test('memory2', () => {
+    const res = parseAndTypecheck(`
+language core;
+extend with #references;
+
+fn foo(n : &Nat) -> Nat {
+  return *n
+}
+
+fn main(n : Nat) -> Nat {
+  return foo(<0x01>)
+}
+
+`);
+    expect(res).instanceof(GoodReport);
+})
+
+test('memory3', () => {
+    const res = parseAndTypecheck(`
+language core;
+extend with #references;
+
+fn main(n : Nat) -> Nat {
+ return *(if true then <0x01> else <0x02>)
+}
+`);
+    expect(res).instanceof(GoodReport);
+})
+
+test('memory4', () => {
+    const res = parseAndTypecheck(`
+language core;
+extend with #references, #type-ascriptions;
+
+fn foo(n : Nat) -> &Nat { return if Nat::iszero(n) then <0x01> else <0x02> }
+
+fn main(n : Nat) -> Nat {
+  return *foo(0)
+}
+
+`);
+    expect(res).instanceof(GoodReport);
+})
+
+
+test('memory_bad', () => {
+    const res = parseAndTypecheck(`
+language core;
+extend with #references;
+
+fn main(n : Nat) -> Nat {
+  return *((fn (_ : Nat) {
+      return <0x01>
+    }) (0))
+}
+`);
+    expectTypeError(res, error_type.ERROR_AMBIGUOUS_REFERENCE_TYPE)
+})
+
+test('memory_not_ref', () => {
+    const res = parseAndTypecheck(`
+language core;
+extend with #references;
+
+fn main(n : Nat) -> Nat {
+  return *n;
+}
+
+`);
+    expectTypeError(res, error_type.ERROR_NOT_A_REFERENCE)
+})
+
+test('memory_ref_to_not_ref', () => {
+    const res = parseAndTypecheck(`
+language core;
+extend with #references;
+
+fn main(n : Nat) -> Bool {
+  return new (true)
+}
+
+`);
+    expectTypeError(res, error_type.ERROR_UNEXPECTED_REFERENCE)
+})
