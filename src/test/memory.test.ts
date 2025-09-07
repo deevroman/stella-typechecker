@@ -7,7 +7,8 @@ import {expectTypeError} from "./utils-for-tests";
 
 
 test('memory', () => {
-    const res = parseAndTypecheck(`language core;
+    const res = parseAndTypecheck(`
+language core;
 extend with #unit-type, #references, #let-bindings, #sequencing;
 
 
@@ -24,7 +25,8 @@ fn inc3(ref : &Nat) -> Nat {
 
 fn main(n : Nat) -> Nat {
   return let ref = new(n) in inc3(ref)
-}`);
+}
+`);
     expect(res).instanceof(GoodReport);
 })
 
@@ -112,4 +114,21 @@ fn main(n : Nat) -> Bool {
 
 `);
     expectTypeError(res, error_type.ERROR_UNEXPECTED_REFERENCE)
+})
+
+
+test('ref_variant', () => {
+    const res = parseAndTypecheck(`
+language core;
+
+extend with #references,
+            #variants;
+
+fn main(n : Nat) -> &<| a : Nat |> {
+  return new(<| a = 0 |>)
+}
+
+
+`);
+    expect(res).instanceof(GoodReport)
 })

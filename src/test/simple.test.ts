@@ -144,3 +144,77 @@ fn main(n : Nat) -> Bool {
     expect(res).instanceof(TypeErrorsReport);
     expectTypeError(res, error_type.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION)
 })
+
+test('unit_arg', () => {
+    const res = parseAndTypecheck(`
+language core;
+extend with #unit-type;
+
+fn seq(_ : Unit) -> fn(Unit) -> Unit {
+  return fn(x : Unit) { return x }
+}
+
+fn main(x : Nat) -> Unit {
+  return seq(unit)(seq(unit))
+}
+`);
+    expectTypeError(res, error_type.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION)
+})
+
+test('seq', () => {
+    const res = parseAndTypecheck(`
+language core;
+extend with #sequencing, #unit-type;
+
+fn main(n : Nat) -> Nat {
+  return (fn(a : Bool) { return unit }) (false); 0
+}
+`);
+    expect(res).instanceof(GoodReport)
+})
+
+test('rec_fix', () => {
+    const res = parseAndTypecheck(`
+language core;
+extend with #panic, #pairs, #fixpoint-combinator;
+// декремент
+fn dec(n : Nat) -> Nat {
+  return Nat::rec(n, {0, 0},
+    fn(k : Nat) {
+      return fn(p : {Nat, Nat}) {
+return { succ(p.1), p.1 }
+} }).2
+}
+
+// вычитание
+fn sub(n : Nat) -> fn(Nat) -> Nat {
+  return fn(m : Nat) {
+    return Nat::rec(m, n, fn(k : Nat) { return dec })
+  }
+}
+
+// деление (с явным параметром для рекурсивного вызова)
+fn mkdiv(div : fn(Nat) -> fn(Nat) -> Nat) -> fn(Nat) -> fn(Nat) -> Nat {
+  return fn(n : Nat) {
+    return fn(m : Nat) {
+      return if Nat::iszero(n) then 0 else
+        succ(div(sub(n)(m))(m))
+    }
+} }
+
+// деление
+fn div(n : Nat) -> fn(Nat) -> Nat {
+  return fn(m : Nat) {
+    return
+      if Nat::iszero(m)
+        then panic! // ОШИБКА: деление на НОЛЬ!
+        else fix(mkdiv)(n)(m)
+} }
+
+fn main(n : Nat) -> Nat {
+  return div(n)(n)
+}
+
+`);
+    expect(res).instanceof(GoodReport)
+})

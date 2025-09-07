@@ -32,7 +32,7 @@ export class StellaType {
         this.type = type;
     }
 
-    addAddr(addr: string) : StellaType {
+    addAddr(addr: string): StellaType {
         this.addr = addr;
         return this;
     }
@@ -175,7 +175,9 @@ export class StellaRef extends StellaType {
             ctx.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_SUBTYPE))
         }
         if (!(oth instanceof StellaRef)) {
-            ctx.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_REFERENCE))
+            if (!(oth instanceof StellaTop)) {
+                ctx.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_REFERENCE))
+            }
             return
         }
         if (this.genericType.type !== "_VOID_REF_TYPE") {
@@ -409,13 +411,31 @@ export class StellaVariant extends StellaType {
             }
             return
         }
-        for (let i = 0; i < this.entities.length; i++) {
-            const [thisLabel, thisType] = this.entities[i]
-            const [othLabel, othType] = oth.entities[i]
-            if (thisLabel !== othLabel) {
+        if (ctx.subtypingEnabled) {
+            if (this.entities.length > oth.entities.length) {
                 ctx.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION))
             }
-            thisType.tryAssignTo(othType, ctx)
+            for (let i = 0; i < this.entities.length; i++) {
+                const [thisLabel, thisType] = this.entities[i]
+                const othType = oth.findTypeByLabel(thisLabel)
+                if (!othType) {
+                    ctx.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION))
+                } else {
+                    thisType.tryAssignTo(othType, ctx)
+                }
+            }
+        } else {
+            if (this.entities.length !== oth.entities.length) {
+                ctx.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION))
+            }
+            for (let i = 0; i < this.entities.length; i++) {
+                const [thisLabel, thisType] = this.entities[i]
+                const [othLabel, othType] = oth.entities[i]
+                if (thisLabel !== othLabel) {
+                    ctx.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION))
+                }
+                thisType.tryAssignTo(othType, ctx)
+            }
         }
     }
 

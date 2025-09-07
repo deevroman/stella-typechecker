@@ -26,6 +26,22 @@ fn main(n : Nat) -> {Top, Bool} {
     expectTypeError(res, error_type.ERROR_UNEXPECTED_TUPLE_LENGTH);
 })
 
+test('top_and_red', () => {
+    const res = parseAndTypecheck(`
+language core;
+
+extend with #references,
+            #top-type,
+            #bottom-type,
+            #structural-subtyping;
+
+fn main(n : Nat) -> Top {
+  return new(0)
+}
+`);
+    expect(res).instanceof(GoodReport)
+})
+
 test('top_in_function_arg', () => {
     const res = parseAndTypecheck(`
 language core;
@@ -96,6 +112,27 @@ extend with #records,
 
 fn main(n : Nat) -> { one : Nat } {
   return { one = 1, two = succ(succ(0)) }
+}
+`);
+    expect(res).instanceof(GoodReport)
+})
+
+test('variants_subtyping', () => {
+    const res = parseAndTypecheck(`
+language core;
+
+extend with #variants,
+            #natural-literals,
+            #top-type,
+            #bottom-type,
+            #structural-subtyping;
+
+fn fail(n : Nat) -> <| failure : Top, value : Nat |> {
+  return <| failure = 1 |>
+}
+
+fn main(n : Nat) -> <| value : Nat, failure : Top, value2 : Bool |> {
+  return fail(n)
 }
 `);
     expect(res).instanceof(GoodReport)

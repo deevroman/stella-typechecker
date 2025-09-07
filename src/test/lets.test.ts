@@ -74,6 +74,32 @@ fn main(n : Nat) -> Nat {
     expect(res).instanceof(GoodReport);
 })
 
+test('let_if_bad', () => {
+    const res = parseAndTypecheck(`
+language core;
+extend with #let-bindings;
+
+
+fn main(n : Nat) -> Nat {
+  return let x = if false then true else succ(0) in x
+}
+`);
+    expectTypeError(res, error_type.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION)
+})
+
+test('let_if_bad2', () => {
+    const res = parseAndTypecheck(`
+language core;
+extend with #let-bindings;
+
+
+fn main(n : Nat) -> Nat {
+  return let x = if false then 0 else false in x
+}
+`);
+    expectTypeError(res, error_type.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION)
+})
+
 test('let_empty', () => {
     const res = parseAndTypecheck(`
 language core;
@@ -146,7 +172,7 @@ fn foo(a : Nat, b : Nat) -> Bool {
 fn main(n : Nat) -> Nat {
   return (fn (a : Nat) { return fix(foo); } ) (0)
 }`);
-    expect(res).instanceof(TypeErrorsReport);
+    expectTypeError(res, error_type.ERROR_INCORRECT_NUMBER_OF_ARGUMENTS)
 })
 
 test('letrec', () => {
