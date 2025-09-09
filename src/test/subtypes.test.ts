@@ -1,7 +1,7 @@
 import {expect, test} from 'vitest'
 import {GoodReport, parseAndTypecheck} from "../typechecker";
 import {error_type} from "../typecheckError";
-import {expectTypeError} from "./utils-for-tests";
+import {expectGood, expectTypeError} from "./utils-for-tests";
 
 
 test('top_and_tuple', () => {
@@ -39,7 +39,7 @@ fn main(n : Nat) -> Top {
   return new(0)
 }
 `);
-    expect(res).instanceof(GoodReport)
+    expectGood(res)
 })
 
 test('top_in_function_arg', () => {
@@ -59,7 +59,7 @@ fn main(b : Bool) -> (fn(Top) -> Top) {
     return kek;
 }
 `);
-    expect(res).instanceof(GoodReport)
+    expectGood(res)
 })
 
 test('top_in_function_arg2', () => {
@@ -79,7 +79,7 @@ fn main(b : Bool) -> (fn(Top) -> Top) {
     return kek;
 }
 `);
-    expect(res).instanceof(GoodReport)
+    expectGood(res)
 })
 
 test('top_in_function_arg_bad', () => {
@@ -114,7 +114,7 @@ fn main(n : Nat) -> { one : Nat } {
   return { one = 1, two = succ(succ(0)) }
 }
 `);
-    expect(res).instanceof(GoodReport)
+    expectGood(res)
 })
 
 test('variants_subtyping', () => {
@@ -135,5 +135,38 @@ fn main(n : Nat) -> <| value : Nat, failure : Top, value2 : Bool |> {
   return fail(n)
 }
 `);
-    expect(res).instanceof(GoodReport)
+    expectGood(res)
+})
+
+
+test('variants_subtyping_bad', () => {
+    const res = parseAndTypecheck(`
+language core;
+
+extend with #variants,
+            #natural-literals,
+            #top-type,
+            #bottom-type,
+            #structural-subtyping,
+            #type-ascriptions;
+
+fn main(n : Nat) -> <| value : Nat, failure : Top|> {
+  return <| failure = 1 |> as (<| failure : Top, value2 : Nat |>)
+}
+
+`);
+    expectTypeError(res, error_type.ERROR_UNEXPECTED_VARIANT_LABEL)
+})
+
+test('if_cond_type', () => {
+    const res = parseAndTypecheck(`
+language core;
+
+extend with #structural-subtyping;
+
+fn main(n : Nat) -> Nat {
+    return if 0 then 0 else 0
+}
+`);
+    expectTypeError(res, error_type.ERROR_UNEXPECTED_SUBTYPE)
 })

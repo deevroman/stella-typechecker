@@ -3,7 +3,7 @@ import {SyntaxErrorReport, parseAndTypecheck, TypeErrorsReport, GoodReport} from
 import {example} from "../examples";
 import {tokenInfo} from "../utils";
 import {error_type} from "../typecheckError";
-import {expectTypeError} from "./utils-for-tests";
+import {expectGood, expectTypeError} from "./utils-for-tests";
 
 test('match', () => {
     const res = parseAndTypecheck(`
@@ -18,7 +18,7 @@ fn main(n : Nat) -> Nat {
    }
 }
 `);
-    expect(res).instanceof(GoodReport);
+    expectGood(res);
 })
 
 test('match2', () => {
@@ -29,11 +29,11 @@ extend with #structural-patterns, #natural-literals, #variants;
 
 fn main(n : (fn(Nat) -> Nat)) -> Nat {
   return match n {
-    \ta => 0
+      a => 0
    }
 }
 `);
-    expect(res).instanceof(GoodReport);
+    expectGood(res);
 })
 
 test('match_unit', () => {
@@ -49,7 +49,7 @@ fn main(n : Nat) -> Nat {
   }
 }
 `);
-    expect(res).instanceof(GoodReport);
+    expectGood(res);
 })
 
 test('match_list', () => {
@@ -60,25 +60,25 @@ extend with #structural-patterns, #natural-literals, #lists;
 
 fn test(n : [Nat]) -> Nat {
   return match n {
-    \t[] => 0
-    \t| [a] => a
+      [] => 0
+      | [a] => a
       | [a, b] => a
       | [a, b, c] => a
       | cons (1, xs) => 1
-    \t| cons (2, cons(3, xs)) => 2
-    \t| cons (a, cons(b, [1, 2])) => b
-    \t| cons (a, cons(b, cons(c, cs))) => c
+      | cons (2, cons(3, xs)) => 2
+      | cons (a, cons(b, [1, 2])) => b
+      | cons (a, cons(b, cons(c, cs))) => c
    }
 }
 
 fn main(n : [Nat]) -> Nat {
   return match n {
-    \t[] => 0
-    \t| cons (x, xs) => 0
+      [] => 0
+      | cons (x, xs) => 0
    }
 }
 `);
-    expect(res).instanceof(GoodReport);
+    expectGood(res);
 })
 
 test('match_nat', () => {
@@ -94,7 +94,7 @@ fn main(n : Nat) -> Nat {
    }
 }   
 `);
-    expect(res).instanceof(GoodReport);
+    expectGood(res);
 })
 
 
@@ -126,7 +126,7 @@ fn main(n : Nat) -> Nat {
    }
 }
     `);
-    expect(res).instanceof(GoodReport);
+    expectGood(res);
 })
 
 test('match_nat_succ', () => {
@@ -194,29 +194,28 @@ test('record', () => {
     const res = parseAndTypecheck(`
 language core;
 
-extend with #structural-patterns, #natural-literals, #records;
+extend with #records;
 
-fn main(n : Nat) -> Nat {
-  return match {a = true, b = 0} {
-    \t{b = c, a = d} => c
-   }
+fn main(succeed : Nat) -> { b : Nat, a : Bool } {
+  return { a = true, b = 0 }
 }
     `);
-    expect(res).instanceof(GoodReport);
+    expectGood(res);
 })
 
 test('record2', () => {
     const res = parseAndTypecheck(`
 language core;
 
-extend with #records;
+extend with #structural-patterns, #natural-literals, #records;
 
-
-fn main(succeed : Nat) -> { b : Nat, a : Bool } {
-  return { a = true, b = 0 }
+fn main(n : Nat) -> Nat {
+  return match {a = true, b = 0} {
+      {b = c, a = d} => c
+   }
 }
     `);
-    expect(res).instanceof(GoodReport);
+    expectGood(res);
 })
 
 test('record3', () => {
@@ -231,7 +230,7 @@ fn main(n : Nat) -> { a : Bool, b : Nat } {
    }
 }
     `);
-    expect(res).instanceof(GoodReport);
+    expectGood(res);
 })
 
 test('record_in_record', () => {
@@ -244,7 +243,7 @@ fn main(n : Nat) -> Nat {
 }
 
     `);
-    expect(res).instanceof(GoodReport);
+    expectGood(res);
 })
 
 test('record_as_arg', () => {
@@ -260,7 +259,7 @@ fn main(n : Nat) -> Nat {
   return foo({ fst = 0, snd = true, thd = true })
 }
 `);
-    expect(res).instanceof(GoodReport);
+    expectGood(res);
 })
 
 test('record_as_arg2', () => {
@@ -314,7 +313,6 @@ fn main(n : Nat) -> { fst : Nat, snd : Bool } {
   return { fst = 0, bar = true}
 }
 `);
-    expect(res).instanceof(TypeErrorsReport);
     expectTypeError(res, error_type.ERROR_UNEXPECTED_RECORD_FIELDS)
 })
 
@@ -331,7 +329,39 @@ fn main(n : Nat) -> Nat {
   return foo({ fst = 0, snd = 0, thd = true })
 }
 `);
-    expect(res).instanceof(GoodReport);
+    expectGood(res);
+})
+
+test('record_duplicate_in_arg', () => {
+    const res = parseAndTypecheck(`
+language core;
+
+extend with #records;
+fn foo(succeed : Bool) -> { a : Nat, b : Nat, b : Nat} {
+    return { a = 0, b = 0 } 
+}
+
+fn main(succeed : Nat) -> { a : Nat, b : Nat } {
+  return foo(true)
+}
+`);
+    expectTypeError(res, error_type.ERROR_DUPLICATE_RECORD_FIELDS)
+})
+
+test('record_duplicate_in_const', () => {
+    const res = parseAndTypecheck(`
+language core;
+
+extend with #records;
+fn foo(succeed : Bool) -> { a : Nat, b : Nat} {
+    return { a = 0, b = 0, b = 0} 
+}
+
+fn main(succeed : Nat) -> { a : Nat, b : Nat } {
+  return foo(true)
+}
+`);
+    expectTypeError(res, error_type.ERROR_DUPLICATE_RECORD_FIELDS)
 })
 
 test('not_record_dot', () => {
@@ -354,24 +384,7 @@ fn main(n : Nat) -> Nat {
 test('not_record_dot2', () => {
     const res = parseAndTypecheck(`
     language core;
-extend with #records, #natural-literals;
-
-fn foo(x : { fst : Nat, snd : Nat, thd : Bool }) -> Nat {
-  return [].fst
-}
-
-fn main(n : Nat) -> Nat {
-  return foo({ fst = 0, snd = 0, thd = true })
-}
-`);
-    expect(res).instanceof(TypeErrorsReport);
-    expectTypeError(res, error_type.ERROR_NOT_A_RECORD)
-})
-
-test('not_record_dot3', () => {
-    const res = parseAndTypecheck(`
-    language core;
-extend with #records, #natural-literals;
+extend with #records, #natural-literals, #lists;
 
 fn foo(x : { fst : Nat, snd : Nat, thd : Bool }) -> Nat {
   return ([]).fst
@@ -381,9 +394,44 @@ fn main(n : Nat) -> Nat {
   return foo({ fst = 0, snd = 0, thd = true })
 }
 `);
-    expect(res).instanceof(TypeErrorsReport);
+    expectTypeError(res, error_type.ERROR_AMBIGUOUS_LIST_TYPE)
+})
+
+test('not_record_dot3', () => {
+    const res = parseAndTypecheck(`
+    language core;
+extend with #records, #natural-literals, #lists, #ambiguous-type-as-bottom;
+
+fn foo(x : { fst : Nat, snd : Nat, thd : Bool }) -> Nat {
+  return ([]).fst
+}
+
+fn main(n : Nat) -> Nat {
+  return foo({ fst = 0, snd = 0, thd = true })
+}
+`);
     expectTypeError(res, error_type.ERROR_NOT_A_RECORD)
 })
+
+/*
+// antlr bug
+test('not_record_dot_', () => {
+    const res = parseAndTypecheck(`
+language core;
+extend with #records, #natural-literals, #lists;
+
+fn foo(x : { fst : Nat, snd : Nat, thd : Bool }) -> Nat {
+  return [].fst
+}
+
+fn main(n : Nat) -> Nat {
+  return foo({ fst = 0, snd = 0, thd = true })
+}
+`);
+    expectTypeError(res, error_type.ERROR_NOT_A_RECORD)
+})
+*/
+
 
 test('record_in_abs', () => {
     const res = parseAndTypecheck(`
@@ -400,7 +448,35 @@ fn main(n : Nat) -> Nat {
   return foo(0)(succ(0)).next
 }
 `);
-    expect(res).instanceof(GoodReport);
+    expectGood(res);
+})
+
+test('record_succ', () => {
+    const res = parseAndTypecheck(`
+language core;
+extend with #records;
+
+fn main(n : Nat) -> Nat {
+  return succ({ a = 0, b = false })
+}
+`);
+    expectTypeError(res, error_type.ERROR_UNEXPECTED_RECORD)
+})
+
+test('record_field_order_bad', () => {
+    const res = parseAndTypecheck(`
+language core;
+
+extend with #records;
+fn foo(succeed : Bool) -> { a : Nat, b : Nat } {
+    return { a = 0, b = 0 }
+}
+
+fn main(succeed : Nat) -> { b : Nat, a : Nat } {
+  return foo(true)
+}
+`);
+    expectTypeError(res, error_type.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION)
 })
 
 test('record_missing_field', () => {
@@ -436,8 +512,44 @@ fn main(n : Nat) -> Nat {
 }
 
 `);
-    expect(res).instanceof(TypeErrorsReport);
     expectTypeError(res, error_type.ERROR_MISSING_RECORD_FIELDS)
+})
+
+test('record_missing_field3', () => {
+    const res = parseAndTypecheck(`
+language core;
+
+extend with #records,
+            #natural-literals,
+            #top-type,
+            #bottom-type,
+            #structural-subtyping;
+
+fn iterate(n : Nat) -> { current : Nat } {
+  return { current = n, next = succ(n) }
+}
+
+fn main(n : Nat) -> { current : Nat, next : Nat } {
+  return iterate(0)
+}
+`);
+    expectTypeError(res, error_type.ERROR_MISSING_RECORD_FIELDS)
+})
+
+test('record_from_if', () => {
+    const res = parseAndTypecheck(`
+language core;
+
+extend with #records;
+fn foo(succeed : Bool) -> { a : Nat, b : Nat } {
+    return if false then { b = 0, a = 0 } else { a = 0, b = 0 }
+}
+
+fn main(succeed : Nat) -> { a : Nat, b : Nat } {
+  return foo(true)
+}
+`);
+    expectGood(res)
 })
 
 

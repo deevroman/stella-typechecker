@@ -20,8 +20,16 @@ const files = fs.readdirSync(TEST_DIR).flatMap(dir => {
 test.each(files)('$error_type/$name', ({error_type, name, fullPath}) => {
     console.log(new URL("file://" + fullPath).toString());
     const source = fs.readFileSync(fullPath, 'utf-8')
+    console.log(source)
+    const firstLine = source.match(/^\/\/ *([A-Z_]+)\n/)?.[1]
+    const allowedErrors = [error_type]
+    if (firstLine) {
+        allowedErrors.push(firstLine)
+    }
     const result = parseAndTypecheck(source)
     expect(result).instanceof(TypeErrorsReport)
-    expect((result as TypeErrorsReport).errors.map(i => i.type.toString())).contains(error_type)
+    const firstError = (result as TypeErrorsReport).errors[0].type
+    console.log(firstError)
+    expect(allowedErrors).toContain(firstError)
     debugger
 })

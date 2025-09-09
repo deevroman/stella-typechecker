@@ -1,6 +1,5 @@
 import {stellaParserVisitorImpl} from "./stellaParserVisitorImpl";
 import {error_type, TypecheckError} from "./typecheckError";
-import {a} from "vitest/dist/chunks/suite.d.FvehnV49";
 
 type StellaTypeEnum =
     "UNIT_TYPE" |
@@ -14,13 +13,15 @@ type StellaTypeEnum =
     "SUM_TYPE" |
     "TUPLE_TYPE" |
     "LIST_TYPE" |
+    "_EMPTY_LIST_TYPE" |
     "VARIANT_TYPE" |
     "FUNCTION_TYPE" |
     "REF_TYPE" |
-    "_VOID_REF_TYPE" |
+    "_CONST_MEMORY_REF_TYPE" |
     "ANY_TYPE" |
     "TOP_TYPE" |
-    "BOT_TYPE";
+    "BOT_TYPE" |
+    "AUTO_TYPE";
 
 export class StellaType {
     type: StellaTypeEnum = "UNIT_TYPE";
@@ -107,10 +108,19 @@ export class StellaFunction extends StellaType {
             ctx.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION))
             return;
         }
+        // const prevErrors = ctx.type_errors
+        // ctx.type_errors = []
         for (let i = 0; i < this.argsTypes.length; i++) {
             oth.argsTypes[i].tryAssignTo(this.argsTypes[i], ctx)
         }
         this.returnType.tryAssignTo(oth.returnType, ctx)
+        // const newErrors = ctx.type_errors
+        // ctx.type_errors = prevErrors
+        // if (newErrors.length) {
+        //     ctx.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_TYPE_FOR_PARAMETER))
+        //     newErrors.forEach(err => ctx.addError(err))
+        // }
+
     }
 }
 
@@ -118,17 +128,24 @@ export class StellaList extends StellaType {
     type: StellaTypeEnum = "LIST_TYPE";
     genericType: StellaType;
 
-    constructor(genericType: StellaType = new StellaType("UNIT_TYPE")) {
+    constructor(genericType: StellaType = new StellaType("_EMPTY_LIST_TYPE")) {
         super();
         this.genericType = genericType;
     }
 
+    static makeEmptyList(ambiguousTypeAsBottom: boolean) {
+        return new StellaList(ambiguousTypeAsBottom ? new StellaBot() : new StellaType("_EMPTY_LIST_TYPE"))
+    }
+
+    isEmptyList() {
+        return this.genericType.type === "_EMPTY_LIST_TYPE"
+    }
 
     isEqualType(oth: StellaType | undefined): boolean {
         if (!super.isEqualType(oth)) {
             return false;
         }
-        if (this.genericType?.type === "UNIT_TYPE") {
+        if (this.genericType?.type === "_EMPTY_LIST_TYPE") {
             return true;
         }
         return this.genericType!.isEqualType((oth as StellaList)?.genericType);
@@ -142,10 +159,10 @@ export class StellaList extends StellaType {
             ctx.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_SUBTYPE))
         }
         if (!(oth instanceof StellaList)) {
-            ctx.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_LIST))
+            ctx.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION))
             return
         }
-        if (this.genericType.type !== "UNIT_TYPE") {
+        if (this.genericType.type !== "_EMPTY_LIST_TYPE") {
             this.genericType.tryAssignTo(oth.genericType, ctx)
         }
     }
@@ -176,11 +193,15 @@ export class StellaRef extends StellaType {
         }
         if (!(oth instanceof StellaRef)) {
             if (!(oth instanceof StellaTop)) {
-                ctx.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_REFERENCE))
+                if (this.genericType.type === "_CONST_MEMORY_REF_TYPE") {
+                    ctx.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_MEMORY_ADDRESS))
+                } else {
+                    ctx.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_REFERENCE))
+                }
             }
             return
         }
-        if (this.genericType.type !== "_VOID_REF_TYPE") {
+        if (this.genericType.type !== "_CONST_MEMORY_REF_TYPE") {
             this.genericType.tryAssignTo(oth.genericType, ctx)
         }
     }
@@ -281,32 +302,34 @@ export class StellaEntityRecord extends StellaType {
 
 export class StellaRecord extends StellaType {
     type: StellaTypeEnum = "RECORD_TYPE";
-    entities: { [p: string]: StellaType } = {}
+    entities: [string, StellaType][] = []
+    private readonly entitiesIndex: { [label: string]: StellaType } = {}
+    incompleted: boolean = false // when dot access
+    pinnedFieldOrder: boolean = true
 
-    constructor(entities: StellaEntityRecord[]) {
+    constructor(entities: StellaEntityRecord[], incompleted: boolean = false, pinnedFieldOrder: boolean = true) {
         super();
-        this.entities = Object.fromEntries(entities.map(e => [e.key, e.valueType!]));
+        this.entities = entities.map(e => [e.key, e.valueType!]);
+        this.entitiesIndex = Object.fromEntries(entities.map(e => [e.key, e.valueType!]));
+        this.incompleted = incompleted
+        this.pinnedFieldOrder = pinnedFieldOrder
     }
 
     isEqualType(oth: StellaType | undefined): boolean {
         if (!super.isEqualType(oth)) {
             return false
         }
-        for (let entitiesKey in this.entities) {
-            const othValue = (oth as StellaRecord).entities[entitiesKey]
-            if (!othValue) {
-                return false
-            }
-            if (!this.entities[entitiesKey].isEqualType(othValue)) {
-                return false
-            }
+        if (!(oth instanceof StellaRecord)) {
+            return false
         }
-        for (let entitiesKey in (oth as StellaRecord).entities) {
-            const thisValue = this.entities[entitiesKey]
-            if (!thisValue) {
+        if (this.entities.length !== oth.entities.length) {
+            return false
+        }
+        for (let i = 0; i < this.entities.length; i++) {
+            if (this.entities[i][0] !== oth.entities[i][0]) {
                 return false
             }
-            if (!(oth as StellaRecord).entities[entitiesKey].isEqualType(thisValue)) {
+            if (this.entities[i][1].isEqualType(oth.entities[i][1])) {
                 return false
             }
         }
@@ -324,21 +347,91 @@ export class StellaRecord extends StellaType {
             ctx.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_RECORD))
             return
         }
-        for (let [label, valueType] of Object.entries(this.entities)) {
-            const valueTypeFromContext = oth.entities[label]
-            if (!valueTypeFromContext) {
-                if (!ctx.subtypingEnabled) {
-                    ctx.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_RECORD_FIELDS))
+        if (ctx.subtypingEnabled) {
+            for (let i = 0; i < oth.entities.length; i++) {
+                const [othLabel, othType] = oth.entities[i]
+                const thisType = this.findTypeByLabel(othLabel)
+                if (thisType) {
+                    thisType.tryAssignTo(othType, ctx)
+                } else {
+                    if (!this.incompleted) {
+                        ctx.addError(new TypecheckError(error_type.ERROR_MISSING_RECORD_FIELDS))
+                    }
+                }
+            }
+            if (this.entities.length < oth.entities.length) {
+                ctx.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION))
+            }
+        } else {
+            if (!this.pinnedFieldOrder) {
+                for (let i = 0; i < oth.entities.length; i++) {
+                    const [othLabel, othType] = oth.entities[i]
+                    if (this.entities[i] === undefined) {
+                        if (!this.findTypeByLabel(othLabel)) {
+                            ctx.addError(new TypecheckError(error_type.ERROR_MISSING_RECORD_FIELDS))
+                        }
+                        continue
+                    }
+                    const thisType = this.findTypeByLabel(othLabel)
+                    if (thisType) {
+                        thisType.tryAssignTo(othType, ctx)
+                    } else {
+                        if (!this.incompleted) {
+                            ctx.addError(new TypecheckError(error_type.ERROR_MISSING_RECORD_FIELDS))
+                        }
+                    }
+                }
+                for (let i = oth.entities.length; i < this.entities.length; i++) {
+                    const [thisLabel, thisType] = this.entities[i]
+                    const othType = oth.findTypeByLabel(thisLabel)
+                    if (othType) {
+                        thisType.tryAssignTo(othType, ctx)
+                    } else {
+                        ctx.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION))
+                    }
                 }
             } else {
-                valueType.tryAssignTo(valueTypeFromContext, ctx)
+                for (let i = 0; i < oth.entities.length; i++) {
+                    const [othLabel, othType] = oth.entities[i]
+                    if (this.entities[i] === undefined) {
+                        if (this.findTypeByLabel(othLabel)) {
+                            ctx.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION))
+                        } else {
+                            ctx.addError(new TypecheckError(error_type.ERROR_MISSING_RECORD_FIELDS))
+                        }
+                        continue
+                    }
+                    const [thisLabel, thisType] = this.entities[i]
+                    if (othLabel !== thisLabel) {
+                        if (this.findTypeByLabel(othLabel)) {
+                            ctx.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION))
+                        } else {
+                            ctx.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_RECORD_FIELDS))
+                        }
+                        continue
+                    }
+                    if (thisType) {
+                        thisType.tryAssignTo(othType, ctx)
+                    } else {
+                        if (!this.incompleted) {
+                            ctx.addError(new TypecheckError(error_type.ERROR_MISSING_RECORD_FIELDS))
+                        }
+                    }
+                }
+                for (let i = oth.entities.length; i < this.entities.length; i++) {
+                    const [thisLabel,] = this.entities[i]
+                    if (oth.findTypeByLabel(thisLabel)) {
+                        ctx.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_RECORD_FIELDS))
+                    } else {
+                        ctx.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION))
+                    }
+                }
             }
         }
-        for (let label in oth.entities) {
-            if (!this.entities[label]) {
-                ctx.addError(new TypecheckError(error_type.ERROR_MISSING_RECORD_FIELDS))
-            }
-        }
+    }
+
+    findTypeByLabel(label: string): StellaType | undefined {
+        return this.entitiesIndex[label]
     }
 }
 
@@ -419,7 +512,7 @@ export class StellaVariant extends StellaType {
                 const [thisLabel, thisType] = this.entities[i]
                 const othType = oth.findTypeByLabel(thisLabel)
                 if (!othType) {
-                    ctx.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION))
+                    ctx.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_VARIANT_LABEL))
                 } else {
                     thisType.tryAssignTo(othType, ctx)
                 }
@@ -467,6 +560,10 @@ export class StellaBot extends StellaType {
     }
 
     tryAssignTo(oth: StellaType, ctx: stellaParserVisitorImpl): void {
-        return;
+        if (ctx.subtypingEnabled) {
+            return;
+        } else {
+            ctx.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION))
+        }
     }
 }

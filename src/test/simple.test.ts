@@ -3,7 +3,7 @@ import {SyntaxErrorReport, parseAndTypecheck, TypeErrorsReport, GoodReport} from
 import {example} from "../examples";
 import {tokenInfo} from "../utils";
 import {error_type} from "../typecheckError";
-import {expectTypeError} from "./utils-for-tests";
+import {expectGood, expectTypeError} from "./utils-for-tests";
 
 
 test('smoke', () => {
@@ -36,7 +36,7 @@ test('undefined var', () => {
 
 test('simple defined var', () => {
     const res = parseAndTypecheck(`language core; fn main(n : Nat) -> Nat { return n }`);
-    expect(res).instanceof(GoodReport)
+    expectGood(res)
 })
 
 test('multiparam', () => {
@@ -57,7 +57,7 @@ fn main(n : Nat) -> Nat {
     return get_m_f(0, true, 0)(0, false)
 }
 `);
-    expect(res).instanceof(GoodReport);
+    expectGood(res);
 })
 
 test('nested', () => {
@@ -74,7 +74,18 @@ fn main(n : Nat) -> Nat {
   return if (nested(n)) then 0 else succ(0)
 }
 `);
-    expect(res).instanceof(GoodReport);
+    expectGood(res);
+})
+
+test('nested_bad', () => {
+    const res = parseAndTypecheck(`
+language core;
+
+fn main(n : Nat) -> (fn(Bool) -> Nat) {
+    return fn(i : Nat) { return i }
+}
+`);
+    expectTypeError(res, error_type.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION)
 })
 
 test('undef', () => {
@@ -145,6 +156,17 @@ fn main(n : Nat) -> Bool {
     expectTypeError(res, error_type.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION)
 })
 
+test('if_cond_type', () => {
+    const res = parseAndTypecheck(`
+language core;
+
+fn main(n : Nat) -> Nat {
+    return if 0 then 0 else 0
+}
+`);
+    expectTypeError(res, error_type.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION)
+})
+
 test('unit_arg', () => {
     const res = parseAndTypecheck(`
 language core;
@@ -170,7 +192,36 @@ fn main(n : Nat) -> Nat {
   return (fn(a : Bool) { return unit }) (false); 0
 }
 `);
-    expect(res).instanceof(GoodReport)
+    expectGood(res)
+})
+
+test('fix', () => {
+    const res = parseAndTypecheck(`
+language core;
+
+extend with #fixpoint-combinator;
+
+fn main(n : Nat) -> Nat {
+  return fix(fn(y : Nat) { return n });
+}
+
+`);
+    expectGood(res)
+})
+
+test('nat_rec', () => {
+    const res = parseAndTypecheck(`
+language core;
+
+fn main(n : Nat) -> Nat {
+  return Nat::rec(n, succ(0), fn(i : Nat) {
+             return fn(r : Nat) {
+             return true
+           } })
+}
+
+`);
+    expectTypeError(res, error_type.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION)
 })
 
 test('rec_fix', () => {
@@ -216,5 +267,38 @@ fn main(n : Nat) -> Nat {
 }
 
 `);
-    expect(res).instanceof(GoodReport)
+    expectGood(res)
+})
+
+
+test('infer_match', () => {
+    const res = parseAndTypecheck(`
+language core;
+
+fn main(n : Nat) -> Nat {
+  return (fn (a : Nat) { return match(0) {
+    x => x
+    | y => true
+    }
+  }) (0)
+}
+`);
+    expectTypeError(res, error_type.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION)
+})
+
+test('name_shadow', () => {
+    const res = parseAndTypecheck(`
+language core;
+
+extend with #nested-function-declarations;
+
+fn main(n : Bool) -> Nat {
+  fn nested(n : Nat) -> Bool {
+     return if (n) then n else false
+  }
+
+  return if (nested(0)) then 0 else succ(0)
+}
+`);
+    expectTypeError(res, error_type.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION)
 })

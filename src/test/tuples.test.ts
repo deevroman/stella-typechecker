@@ -3,7 +3,7 @@ import {SyntaxErrorReport, parseAndTypecheck, TypeErrorsReport, GoodReport} from
 import {example} from "../examples";
 import {tokenInfo} from "../utils";
 import {error_type} from "../typecheckError";
-import {expectTypeError} from "./utils-for-tests";
+import {expectGood, expectTypeError} from "./utils-for-tests";
 
 test('pair', () => {
     const res = parseAndTypecheck(`
@@ -14,7 +14,7 @@ fn main(n : Nat) -> {Nat, Nat} {
   return {succ(n), {succ(succ(n)), n}}.2
 }
 `);
-    expect(res).instanceof(GoodReport);
+    expectGood(res);
 })
 
 test('tuple', () => {
@@ -26,7 +26,7 @@ fn main(n : Nat) -> {Nat, Nat, Bool} {
   return {n, succ(n), true}
 }
 `);
-    expect(res).instanceof(GoodReport);
+    expectGood(res);
 })
 
 test('call_tuple', () => {
@@ -71,6 +71,53 @@ fn main(n : Nat) -> Nat {
 }
 }
 `);
-    expect(res).instanceof(TypeErrorsReport);
     expectTypeError(res, error_type.ERROR_UNEXPECTED_PATTERN_FOR_TYPE)
+})
+
+test('tuple_bad_index', () => {
+    const res = parseAndTypecheck(`
+language core;
+extend with #tuples, #lists;
+
+fn main(n : Nat) -> Nat {
+  return {}.1
+}
+`);
+    expectTypeError(res, error_type.ERROR_TUPLE_INDEX_OUT_OF_BOUNDS)
+})
+
+test('tuple_bad_index2', () => {
+    const res = parseAndTypecheck(`
+language core;
+extend with #tuples, #lists;
+
+fn main(n : Nat) -> Nat {
+  return {}.0
+}
+`);
+    expectTypeError(res, error_type.ERROR_TUPLE_INDEX_OUT_OF_BOUNDS)
+})
+
+test('not_tuple', () => {
+    const res = parseAndTypecheck(`
+language core;
+extend with #tuples;
+
+fn main(n : Nat) -> Nat {
+  return true.1
+}
+`);
+    expectTypeError(res, error_type.ERROR_NOT_A_TUPLE)
+})
+
+test('not_tuple2', () => {
+    const res = parseAndTypecheck(`
+language core;
+extend with #tuples, #lists;
+
+fn main(n : Nat) -> Nat {
+  return ([]).1
+}
+`);
+    expectTypeError(res, error_type.ERROR_AMBIGUOUS_LIST_TYPE)
 })

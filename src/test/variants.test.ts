@@ -3,7 +3,7 @@ import {SyntaxErrorReport, parseAndTypecheck, TypeErrorsReport, GoodReport} from
 import {example} from "../examples";
 import {tokenInfo} from "../utils";
 import {error_type} from "../typecheckError";
-import {expectTypeError} from "./utils-for-tests";
+import {expectGood, expectTypeError} from "./utils-for-tests";
 
 test('variant', () => {
     const res = parseAndTypecheck(`
@@ -18,7 +18,7 @@ fn main(n : <| a : Nat, b : Bool |>) -> Nat {
    }
 }
 `);
-    expect(res).instanceof(GoodReport);
+    expectGood(res);
 })
 
 test('variant2', () => {
@@ -39,7 +39,22 @@ fn main(succeed : Bool) -> Nat {
     | <| failure = f |> => 0
   }
 }`);
-    expect(res).instanceof(GoodReport);
+    expectGood(res);
+})
+
+test('variant3', () => {
+    const res = parseAndTypecheck(`
+language core;
+
+extend with #sum-types, #unit-type, #variants;
+
+fn main(input : Bool) -> Nat {
+  return match input {
+     <| failure = f |>  => n
+  }
+}
+`);
+    expectTypeError(res, error_type.ERROR_UNEXPECTED_PATTERN_FOR_TYPE)
 })
 
 test('variant_nullary', () => {
@@ -53,7 +68,7 @@ fn main(n : Nat) -> <| a : Nat, b, c |> {
 }
 
 `);
-    expect(res).instanceof(GoodReport);
+    expectGood(res);
 })
 
 test('variant_nullary_pattern', () => {
@@ -74,7 +89,7 @@ fn main(n : Nat) -> Nat {
 }
 
 `);
-    expect(res).instanceof(GoodReport);
+    expectGood(res);
 })
 
 test('variant_nullary_bad', () => {
@@ -87,8 +102,39 @@ fn main(n : Nat) -> <| a : Nat, b, c |> {
   return <| a |>
 }
 `);
-    expect(res).instanceof(TypeErrorsReport);
     expectTypeError(res, error_type.ERROR_MISSING_DATA_FOR_LABEL)
+})
+
+test('variant_nullary_pattern_bad', () => {
+    const res = parseAndTypecheck(`
+language core;
+
+extend with #structural-patterns, #natural-literals, #variants, #nullary-variant-labels;
+
+fn main(n : <| a : Nat, b, c |>) -> Nat {
+  return match n {
+      <| b = t |> => 0
+      | m => 0
+  }
+}
+`);
+    expectTypeError(res, error_type.ERROR_UNEXPECTED_NON_NULLARY_VARIANT_PATTERN)
+})
+
+test('variant_nullary_pattern_bad2', () => {
+    const res = parseAndTypecheck(`
+language core;
+
+extend with #structural-patterns, #natural-literals, #variants, #nullary-variant-labels;
+
+fn main(n : <| a : Nat, b, c |>) -> Nat {
+  return match n {
+      <| a |> => 0
+      | m => 0
+  }
+}
+`);
+    expectTypeError(res, error_type.ERROR_UNEXPECTED_NULLARY_VARIANT_PATTERN)
 })
 
 test('variant_nullary_bad2', () => {
@@ -101,7 +147,6 @@ fn main(n : Nat) -> <| a : Nat, b, c |> {
   return <| b = true |>
 }
 `);
-    expect(res).instanceof(TypeErrorsReport);
     expectTypeError(res, error_type.ERROR_UNEXPECTED_DATA_FOR_NULLARY_LABEL)
 })
 
@@ -115,7 +160,6 @@ fn main(n : Nat) -> <| a : Nat, b, c |> {
   return <| e |>
 }
 `);
-    expect(res).instanceof(TypeErrorsReport);
     expectTypeError(res, error_type.ERROR_UNEXPECTED_VARIANT_LABEL)
 })
 
@@ -132,7 +176,6 @@ fn main(n : <| a : Nat, b : Bool |>) -> Nat {
    }
 }
 `);
-    expect(res).instanceof(TypeErrorsReport);
     expectTypeError(res, error_type.ERROR_UNEXPECTED_PATTERN_FOR_TYPE)
 })
 
@@ -150,7 +193,6 @@ fn main(n : Nat) -> <| a : Nat, b : Bool |> {
      }) (0)
 }
 `);
-    expect(res).instanceof(TypeErrorsReport);
     expectTypeError(res, error_type.ERROR_AMBIGUOUS_VARIANT_TYPE)
 })
 
@@ -174,7 +216,6 @@ fn main(succeed : Bool) -> Nat {
   }
 }
 `);
-    expect(res).instanceof(TypeErrorsReport);
     expectTypeError(res, error_type.ERROR_UNEXPECTED_VARIANT_LABEL)
 })
 
@@ -198,8 +239,31 @@ fn main(succeed : Bool) -> Nat {
   }
 }
 `);
-    expect(res).instanceof(TypeErrorsReport);
     expectTypeError(res, error_type.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION)
+})
+
+test('variant_bad5', () => {
+    const res = parseAndTypecheck(`
+    language core;
+extend with #variants;
+extend with #type-ascriptions;
+
+fn g(x : <| number : Nat, boolean : Bool, function : fn(Nat) -> Nat |>) -> Nat {
+  return match  <| value = n |> {
+      <| number   = n |> => succ(n)
+    | <| boolean  = b |> => if b then succ(0) else 0
+    | <| function = f |> => f(f(succ(0)))
+  }
+}
+
+fn main(x : Nat) -> Nat {
+  return g(<| function = fn(n : Nat) {
+      return g(<| number = n |>
+        as <| number : Nat, boolean : Bool, function : fn(Nat) -> Nat |>) }
+  |> as <| number : Nat, boolean : Bool, function : fn(Nat) -> Nat |>)
+}
+`);
+    expectTypeError(res, error_type.ERROR_AMBIGUOUS_VARIANT_TYPE)
 })
 
 test('variant_bad_if_in_if', () => {
@@ -224,7 +288,6 @@ fn main(succeed : Bool) -> Nat {
   }
 }
 `);
-    expect(res).instanceof(TypeErrorsReport);
     expectTypeError(res, error_type.ERROR_UNEXPECTED_VARIANT_LABEL)
 })
 
@@ -250,6 +313,30 @@ fn main(succeed : Bool) -> Nat {
   }
 }
 `);
-    expect(res).instanceof(TypeErrorsReport);
+    expectTypeError(res, error_type.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION)
+})
+
+test('variant_bad_if_in_if2', () => {
+    const res = parseAndTypecheck(`
+language core;
+
+extend with #variants, #unit-type;
+
+fn attempt(get_one? : Bool) -> <| value : Nat, failure : Unit |> {
+  return
+    if get_one?
+      then if get_one?
+        then <| value = 0 |>
+        else <| failure = 0 |>
+      else <| failure = unit |>
+}
+
+fn main(succeed : Bool) -> Nat {
+  return match attempt(succeed) {
+      <| value = n |> => succ(n)
+    | <| failure = f |> => 0
+  }
+}
+`);
     expectTypeError(res, error_type.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION)
 })

@@ -1,7 +1,7 @@
 import {ANTLRInputStream, CommonTokenStream} from 'antlr4ts';
 import {stellaLexer} from "./gen/generic-main-antlr/antlr/stellaLexer";
 import {
-    DeclContext, DeclExceptionTypeContext,
+    DeclContext, DeclExceptionTypeContext, DeclExceptionVariantContext,
     DeclFunContext,
     ProgramContext,
     stellaParser
@@ -12,7 +12,7 @@ import {ANTLRErrorListener, RecognitionException, Recognizer} from 'antlr4ts';
 import {TypesCollector} from './typesCollector'
 import {stellaParserVisitorImpl} from "./stellaParserVisitorImpl";
 import {error_type, TypecheckError} from "./typecheckError";
-import {StellaType} from "./typecheckTypes";
+import {StellaEntityVariant, StellaType, StellaVariant} from "./typecheckTypes";
 
 class BufferedErrorListener implements ANTLRErrorListener<any> {
     public syntaxErrors: SyntaxError[] = [];
@@ -88,8 +88,17 @@ function checkProgram(parser: stellaParser, tree: ProgramContext) {
 
     const visitor = new stellaParserVisitorImpl(collector.getExtensions(tree));
 
-    const declException = tree.decl().find(i => i instanceof DeclExceptionTypeContext);
+    const declException = tree.decl().findLast(i => i instanceof DeclExceptionTypeContext);
     visitor.exceptionType = declException?._exceptionType?.accept(visitor) as StellaType | undefined
+
+    const declExceptionsVariants = tree.decl().filter(i => i instanceof DeclExceptionVariantContext);
+    if (declExceptionsVariants.length) {
+        const variantEntities: StellaEntityVariant[] = []
+        declExceptionsVariants.forEach(decl => {
+            variantEntities.push(visitor.visitDeclExceptionVariant(decl))
+        })
+        visitor.exceptionType = new StellaVariant(variantEntities)
+    }
 
     const functions = makeFunctionsMap(findAllFunctions(tree.decl()));
     addFunctionsToScope(visitor, functions)
@@ -144,7 +153,8 @@ export function findAllFunctions(decls: DeclContext[]): DeclFunContext[] {
 
 export function addFunctionsToScope(visitor: stellaParserVisitorImpl, functions: { [p: string]: DeclFunContext }) {
     for (let [name, f] of Object.entries(functions)) {
-        visitor.addToScope(name, TypesCollector.extractFunctionTypes(f))
+        visitor.addToScope(name, TypesCollector.extractFunctionTypes(f, visitor))
+        f.accept(visitor)
     }
 }
 

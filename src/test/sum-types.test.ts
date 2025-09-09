@@ -1,7 +1,7 @@
 import {expect, test} from 'vitest'
-import {GoodReport, parseAndTypecheck, TypeErrorsReport} from "../typechecker";
+import {parseAndTypecheck, TypeErrorsReport} from "../typechecker";
 import {error_type} from "../typecheckError";
-import {expectTypeError} from "./utils-for-tests";
+import {expectGood, expectTypeError} from "./utils-for-tests";
 
 
 test('sum_type', () => {
@@ -17,7 +17,7 @@ fn main(n : Nat + Bool) -> Nat {
    }
 }
     `);
-    expect(res).instanceof(GoodReport);
+    expectGood(res);
 })
 
 test('sum_type2', () => {
@@ -33,7 +33,7 @@ fn main(n : Nat + Bool) -> Bool {
    }
 }
     `);
-    expect(res).instanceof(GoodReport);
+    expectGood(res);
 })
 
 
@@ -53,7 +53,7 @@ fn main(input : Bool) -> Nat {
   return test(inl(0))
 }
     `);
-    expect(res).instanceof(GoodReport);
+    expectGood(res);
 })
 
 test('sum_type4', () => {
@@ -73,7 +73,7 @@ fn main(input : Bool) -> Nat {
   }
 }
     `);
-    expect(res).instanceof(GoodReport);
+    expectGood(res);
 })
 
 test('sum_type_bad', () => {
@@ -142,7 +142,7 @@ fn main(n : Nat) -> Bool + Nat {
   })(n)
 }
     `);
-    expect(res).instanceof(GoodReport);
+    expectGood(res);
 })
 
 test('sum_type_with_bot_inl', () => {
@@ -155,5 +155,37 @@ fn main(n : Nat) -> Nat + Bool {
   })(n)
 }
     `);
-    expect(res).instanceof(GoodReport);
+    expectGood(res);
+})
+
+test('sum_type_match', () => {
+    const res = parseAndTypecheck(`
+language core;
+
+extend with #sum-types, #unit-type, #type-ascriptions;
+
+fn main(input : Bool) -> Nat {
+  return match inr(0) as (Nat + Nat) {
+      inl(n) => n
+    | inr(_) => 0
+  }
+}
+    `);
+    expectGood(res)
+})
+
+test('sum_type_match_bad', () => {
+    const res = parseAndTypecheck(`
+language core;
+
+extend with #sum-types, #unit-type;
+
+fn main(input : Bool) -> Nat {
+  return match input {
+      inl(n) => n
+    | inr(_) => 0
+  }
+}
+    `);
+    expectTypeError(res, error_type.ERROR_UNEXPECTED_PATTERN_FOR_TYPE)
 })

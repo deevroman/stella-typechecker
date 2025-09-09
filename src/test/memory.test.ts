@@ -3,7 +3,7 @@ import {SyntaxErrorReport, parseAndTypecheck, TypeErrorsReport, GoodReport} from
 import {example} from "../examples";
 import {tokenInfo} from "../utils";
 import {error_type} from "../typecheckError";
-import {expectTypeError} from "./utils-for-tests";
+import {expectGood, expectTypeError} from "./utils-for-tests";
 
 
 test('memory', () => {
@@ -27,7 +27,7 @@ fn main(n : Nat) -> Nat {
   return let ref = new(n) in inc3(ref)
 }
 `);
-    expect(res).instanceof(GoodReport);
+    expectGood(res);
 })
 
 
@@ -45,7 +45,7 @@ fn main(n : Nat) -> Nat {
 }
 
 `);
-    expect(res).instanceof(GoodReport);
+    expectGood(res);
 })
 
 test('memory3', () => {
@@ -57,7 +57,7 @@ fn main(n : Nat) -> Nat {
  return *(if true then <0x01> else <0x02>)
 }
 `);
-    expect(res).instanceof(GoodReport);
+    expectGood(res);
 })
 
 test('memory4', () => {
@@ -72,7 +72,19 @@ fn main(n : Nat) -> Nat {
 }
 
 `);
-    expect(res).instanceof(GoodReport);
+    expectGood(res);
+})
+
+test('memory_ref_ref', () => {
+    const res = parseAndTypecheck(`
+language core;
+extend with #references, #sequencing;
+
+fn main(n : &&Nat) -> Nat {
+  return *n := 0; succ(0)
+}
+`);
+    expectGood(res);
 })
 
 
@@ -127,8 +139,47 @@ extend with #references,
 fn main(n : Nat) -> &<| a : Nat |> {
   return new(<| a = 0 |>)
 }
+`);
+    expectGood(res)
+})
 
+test('mem_to_not_ref', () => {
+    const res = parseAndTypecheck(`
+language core;
+extend with #references;
+
+fn main(n : Nat) -> Nat {
+  return if Nat::iszero(n) then <0x01> else <0x02>
+}
 
 `);
-    expect(res).instanceof(GoodReport)
+    expectTypeError(res, error_type.ERROR_UNEXPECTED_MEMORY_ADDRESS)
+})
+
+test('seq', () => {
+    const res = parseAndTypecheck(`
+language core;
+extend with #references;
+
+fn main(n : Nat) -> Nat {
+  return if Nat::iszero(n) then <0x01> else <0x02>
+}
+
+`);
+    expectTypeError(res, error_type.ERROR_UNEXPECTED_MEMORY_ADDRESS)
+})
+
+test('seq2', () => {
+    const res = parseAndTypecheck(`
+language core;
+extend with #sequencing, #unit-type;
+
+fn main(n : Nat) -> Nat {
+  return (fn(a : Nat) { return unit }) (0);
+   (fn(a : Nat) { return a }) (0);
+    0
+}
+
+`);
+    expectTypeError(res, error_type.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION)
 })

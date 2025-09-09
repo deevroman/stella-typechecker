@@ -22,6 +22,22 @@ generic fn const[X, Y](x : X) -> fn(Y) -> X {
 fn main(x : Nat) -> Nat {
   return const[Nat, Bool](x)(false)
 }`);
-    expect(res).instanceof(GoodReport);
+    expectGood(res);
+})
+*/
+
+/*
+test('auto_fix', () => {
+    const res = parseAndTypecheck(`
+language core;
+
+extend with #type-reconstruction, #fixpoint-combinator;
+
+fn main(f : fn(auto) -> auto) -> auto {
+  return fix(f);
+}
+
+`);
+    expectGood(res);
 })
 */
