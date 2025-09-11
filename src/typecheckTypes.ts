@@ -21,16 +21,76 @@ type StellaTypeEnum =
     "ANY_TYPE" |
     "TOP_TYPE" |
     "BOT_TYPE" |
-    "AUTO_TYPE";
+    "AUTO_TYPE" |
+    "GENERIC_TYPE";
 
 export class StellaType {
-    type: StellaTypeEnum = "UNIT_TYPE";
+    readonly type: StellaTypeEnum = "UNIT_TYPE";
     value: string | undefined = undefined;
     isEqualValue: boolean = true;
-    addr: string = "";
+    addr: string = ""; // todo cleanup
+    genericsList: StellaGenericVarType[] = [];
 
     constructor(type: StellaTypeEnum = "UNIT_TYPE") {
         this.type = type;
+    }
+
+    addAddr(addr: string): StellaType {
+        this.addr = addr;
+        return this;
+    }
+
+    addValue(value: string, isEqualValue: boolean) {
+        this.value = value
+        this.isEqualValue = isEqualValue
+        return this
+    }
+
+    addGenericsList(genericsList: StellaGenericVarType[]) {
+        this.genericsList = genericsList
+        return this
+    }
+
+    isGeneric() {
+        return this.genericsList.length !== 0
+    }
+
+    isEqualType(oth: StellaType | undefined) {
+        return this.type === oth?.type
+    }
+
+    tryAssignTo(oth: StellaType, ctx: stellaParserVisitorImpl): void {
+        if (ctx.subtypingEnabled && oth instanceof StellaTop) {
+            return
+        }
+        if (ctx.subtypingEnabled && oth instanceof StellaBot) {
+            ctx.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_SUBTYPE))
+        }
+        if (this.type !== oth.type) {
+            if (ctx.subtypingEnabled) {
+                ctx.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_SUBTYPE))
+            } else {
+                ctx.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION))
+            }
+        }
+    }
+
+    substituteGenerics(genericsMap: Record<string, StellaType>) : StellaType {
+        return this
+    }
+}
+
+
+export class StellaGenericVarType extends StellaType {
+    readonly type: StellaTypeEnum = "GENERIC_TYPE";
+    genericName: string;
+    value: string | undefined = undefined;
+    isEqualValue: boolean = true;
+
+    constructor(genericName: string) {
+        super();
+        this.genericName = genericName
+        this.genericsList = [this]
     }
 
     addAddr(addr: string): StellaType {
@@ -61,17 +121,29 @@ export class StellaType {
             } else {
                 ctx.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION))
             }
+        } else {
+            if (this.genericName !== (oth as StellaGenericVarType).genericName) {
+                ctx.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION))
+            }
         }
+    }
+
+    substituteGenerics(genericsMap: Record<string, StellaType>) : StellaType {
+        if (genericsMap[this.genericName]) {
+            return genericsMap[this.genericName]
+        }
+        return this
     }
 }
 
+
 export class StellaFunction extends StellaType {
-    type: StellaTypeEnum = "FUNCTION_TYPE";
+    readonly type: StellaTypeEnum = "FUNCTION_TYPE";
     argsTypes: StellaType[] = [];
     returnType: StellaType = new StellaType("UNIT_TYPE");
 
     constructor(argsTypes: StellaType[], returnType: StellaType) {
-        super();
+        super("FUNCTION_TYPE");
         this.argsTypes = argsTypes;
         this.returnType = returnType;
     }
@@ -104,6 +176,11 @@ export class StellaFunction extends StellaType {
             ctx.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION))
             return
         }
+        // todo names?
+        if (this.genericsList.length !== oth.genericsList.length) {
+            ctx.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION))
+            return;
+        }
         if (this.argsTypes.length !== oth.argsTypes.length) {
             ctx.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION))
             return;
@@ -122,15 +199,29 @@ export class StellaFunction extends StellaType {
         // }
 
     }
+
+    substituteGenerics(genericsMap: Record<string, StellaType>) : StellaType {
+        let newRemainingGenerics = []
+        const newArgs: StellaType[] = []
+        this.argsTypes.forEach(i => {
+            const newArg = i.substituteGenerics(genericsMap)
+            newRemainingGenerics.push(...newArg.genericsList)
+            newArgs.push(newArg)
+        })
+        const newReturnType = this.returnType.substituteGenerics(genericsMap)
+        newRemainingGenerics.push(...newReturnType.genericsList)
+        // todo deduplicate
+        return new StellaFunction(newArgs, newReturnType).addGenericsList(newRemainingGenerics)
+    }
 }
 
 export class StellaList extends StellaType {
-    type: StellaTypeEnum = "LIST_TYPE";
-    genericType: StellaType;
+    readonly type: StellaTypeEnum = "LIST_TYPE";
+    parameterType: StellaType;
 
-    constructor(genericType: StellaType = new StellaType("_EMPTY_LIST_TYPE")) {
+    constructor(parameterType: StellaType = new StellaType("_EMPTY_LIST_TYPE")) {
         super();
-        this.genericType = genericType;
+        this.parameterType = parameterType;
     }
 
     static makeEmptyList(ambiguousTypeAsBottom: boolean) {
@@ -138,17 +229,17 @@ export class StellaList extends StellaType {
     }
 
     isEmptyList() {
-        return this.genericType.type === "_EMPTY_LIST_TYPE"
+        return this.parameterType.type === "_EMPTY_LIST_TYPE"
     }
 
     isEqualType(oth: StellaType | undefined): boolean {
         if (!super.isEqualType(oth)) {
             return false;
         }
-        if (this.genericType?.type === "_EMPTY_LIST_TYPE") {
+        if (this.parameterType?.type === "_EMPTY_LIST_TYPE") {
             return true;
         }
-        return this.genericType!.isEqualType((oth as StellaList)?.genericType);
+        return this.parameterType!.isEqualType((oth as StellaList)?.parameterType);
     }
 
     tryAssignTo(oth: StellaType, ctx: stellaParserVisitorImpl) {
@@ -162,26 +253,31 @@ export class StellaList extends StellaType {
             ctx.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION))
             return
         }
-        if (this.genericType.type !== "_EMPTY_LIST_TYPE") {
-            this.genericType.tryAssignTo(oth.genericType, ctx)
+        if (this.parameterType.type !== "_EMPTY_LIST_TYPE") {
+            this.parameterType.tryAssignTo(oth.parameterType, ctx)
         }
+    }
+
+    substituteGenerics(genericsMap: Record<string, StellaType>) : StellaType {
+        const newParameterType = this.parameterType.substituteGenerics(genericsMap)
+        return new StellaList(newParameterType)
     }
 }
 
 export class StellaRef extends StellaType {
-    type: StellaTypeEnum = "REF_TYPE";
-    genericType: StellaType;
+    readonly type: StellaTypeEnum = "REF_TYPE";
+    parameterType: StellaType;
 
-    constructor(genericType: StellaType = new StellaType("UNIT_TYPE")) {
+    constructor(parameterType: StellaType = new StellaType("UNIT_TYPE")) {
         super();
-        this.genericType = genericType;
+        this.parameterType = parameterType;
     }
 
     isEqualType(oth: StellaType | undefined): boolean {
         if (!super.isEqualType(oth)) {
             return false;
         }
-        return this.genericType!.isEqualType((oth as StellaList)?.genericType);
+        return this.parameterType!.isEqualType((oth as StellaList)?.parameterType);
     }
 
     tryAssignTo(oth: StellaType, ctx: stellaParserVisitorImpl) {
@@ -193,7 +289,7 @@ export class StellaRef extends StellaType {
         }
         if (!(oth instanceof StellaRef)) {
             if (!(oth instanceof StellaTop)) {
-                if (this.genericType.type === "_CONST_MEMORY_REF_TYPE") {
+                if (this.parameterType.type === "_CONST_MEMORY_REF_TYPE") {
                     ctx.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_MEMORY_ADDRESS))
                 } else {
                     ctx.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_REFERENCE))
@@ -201,14 +297,19 @@ export class StellaRef extends StellaType {
             }
             return
         }
-        if (this.genericType.type !== "_CONST_MEMORY_REF_TYPE") {
-            this.genericType.tryAssignTo(oth.genericType, ctx)
+        if (this.parameterType.type !== "_CONST_MEMORY_REF_TYPE") {
+            this.parameterType.tryAssignTo(oth.parameterType, ctx)
         }
+    }
+
+    substituteGenerics(genericsMap: Record<string, StellaType>) : StellaType {
+        const newParameterType = this.parameterType.substituteGenerics(genericsMap)
+        return new StellaRef(newParameterType)
     }
 }
 
 export class StellaSumType extends StellaType {
-    type: StellaTypeEnum = "SUM_TYPE";
+    readonly type: StellaTypeEnum = "SUM_TYPE";
     leftType: StellaType | undefined;
     rightType: StellaType | undefined;
 
@@ -239,10 +340,16 @@ export class StellaSumType extends StellaType {
         this.leftType!.tryAssignTo(oth.leftType!, ctx)
         this.rightType!.tryAssignTo(oth.rightType!, ctx)
     }
+
+    substituteGenerics(genericsMap: Record<string, StellaType>) : StellaType {
+        const newLeftType = this.leftType!.substituteGenerics(genericsMap)
+        const newRightType = this.rightType!.substituteGenerics(genericsMap)
+        return new StellaSumType(newLeftType, newRightType)
+    }
 }
 
 export class StellaTuple extends StellaType {
-    type: StellaTypeEnum = "TUPLE_TYPE";
+    readonly type: StellaTypeEnum = "TUPLE_TYPE";
     elems: StellaType[] = []
 
     constructor(elems: StellaType[]) {
@@ -285,11 +392,19 @@ export class StellaTuple extends StellaType {
             this.elems[i].tryAssignTo(oth.elems[i], ctx)
         }
     }
+
+    substituteGenerics(genericsMap: Record<string, StellaType>) : StellaType {
+        const newElems: StellaType[] = []
+        this.elems.forEach(i => {
+            newElems.push(i.substituteGenerics(genericsMap))
+        })
+        return new StellaTuple(newElems)
+    }
 }
 
 
 export class StellaEntityRecord extends StellaType {
-    type: StellaTypeEnum = "_RECORD_ENTITY_TYPE";
+    readonly type: StellaTypeEnum = "_RECORD_ENTITY_TYPE";
     key: string;
     valueType: StellaType | undefined;
 
@@ -301,7 +416,7 @@ export class StellaEntityRecord extends StellaType {
 }
 
 export class StellaRecord extends StellaType {
-    type: StellaTypeEnum = "RECORD_TYPE";
+    readonly type: StellaTypeEnum = "RECORD_TYPE";
     entities: [string, StellaType][] = []
     private readonly entitiesIndex: { [label: string]: StellaType } = {}
     incompleted: boolean = false // when dot access
@@ -433,11 +548,19 @@ export class StellaRecord extends StellaType {
     findTypeByLabel(label: string): StellaType | undefined {
         return this.entitiesIndex[label]
     }
+
+    substituteGenerics(genericsMap: Record<string, StellaType>) : StellaType {
+        const newEntities: StellaEntityRecord[] = []
+        this.entities.forEach(([name, type]) => {
+            newEntities.push(new StellaEntityRecord(name, type.substituteGenerics(genericsMap)))
+        })
+        return new StellaRecord(newEntities)
+    }
 }
 
 
 export class StellaEntityVariant extends StellaType {
-    type: StellaTypeEnum = "_VARIANT_ENTITY_TYPE";
+    readonly type: StellaTypeEnum = "_VARIANT_ENTITY_TYPE";
     key: string;
     valueType: StellaType | undefined;
 
@@ -450,7 +573,7 @@ export class StellaEntityVariant extends StellaType {
 
 
 export class StellaVariant extends StellaType {
-    type: StellaTypeEnum = "VARIANT_TYPE";
+    readonly type: StellaTypeEnum = "VARIANT_TYPE";
     entities: [string, StellaType][] = []
 
     private readonly entitiesIndex: { [label: string]: StellaType } = {}
@@ -535,10 +658,18 @@ export class StellaVariant extends StellaType {
     findTypeByLabel(label: string): StellaType | undefined {
         return this.entitiesIndex[label]
     }
+
+    substituteGenerics(genericsMap: Record<string, StellaType>) : StellaType {
+        const newEntities: StellaEntityVariant[] = []
+        this.entities.forEach(([name, type]) => {
+            newEntities.push(new StellaEntityVariant(name, type.substituteGenerics(genericsMap)))
+        })
+        return new StellaVariant(newEntities)
+    }
 }
 
 export class StellaTop extends StellaType {
-    type: StellaTypeEnum = "TOP_TYPE";
+    readonly type: StellaTypeEnum = "TOP_TYPE";
 
     constructor() {
         super();
@@ -553,7 +684,7 @@ export class StellaTop extends StellaType {
 }
 
 export class StellaBot extends StellaType {
-    type: StellaTypeEnum = "BOT_TYPE";
+    readonly type: StellaTypeEnum = "BOT_TYPE";
 
     constructor() {
         super();

@@ -2,7 +2,7 @@ import {ANTLRInputStream, CommonTokenStream} from 'antlr4ts';
 import {stellaLexer} from "./gen/generic-main-antlr/antlr/stellaLexer";
 import {
     DeclContext, DeclExceptionTypeContext, DeclExceptionVariantContext,
-    DeclFunContext,
+    DeclFunContext, DeclFunGenericContext,
     ProgramContext,
     stellaParser
 } from "./gen/generic-main-antlr/antlr/stellaParser";
@@ -35,6 +35,7 @@ class BufferedErrorListener implements ANTLRErrorListener<any> {
 
 export interface Report {
     ok: boolean;
+    sourceText: string;
 }
 
 export class SyntaxError {
@@ -46,9 +47,15 @@ export class SyntaxError {
 export class SyntaxErrorReport implements Report {
     ok: boolean = false;
     syntaxErrors: SyntaxError[] = [];
+    sourceText: string = "";
 
     constructor(syntaxErrors: SyntaxError[]) {
         this.syntaxErrors = syntaxErrors;
+    }
+
+    addSource(sourceText: string) {
+        this.sourceText = sourceText
+        return this
     }
 }
 
@@ -57,11 +64,17 @@ export class TypeErrorsReport implements Report {
     errors: TypecheckError[] = [];
     extensions: object = {};
     payload: any;
+    sourceText: string = "";
 
     constructor(errors: TypecheckError[], extensions: object, payload: any) {
         this.errors = errors;
         this.extensions = extensions;
         this.payload = payload;
+    }
+
+    addSource(sourceText: string) {
+        this.sourceText = sourceText
+        return this
     }
 }
 
@@ -69,9 +82,16 @@ export class GoodReport implements Report {
     ok: boolean = true;
     extensions: object = {};
     payload: any;
+    sourceText: string = "";
+
     constructor(extensions: object, payload: any) {
         this.extensions = extensions;
         this.payload = payload;
+    }
+
+    addSource(sourceText: string) {
+        this.sourceText = sourceText
+        return this
     }
 }
 
@@ -102,8 +122,20 @@ function checkProgram(parser: stellaParser, tree: ProgramContext) {
 
     const functions = makeFunctionsMap(findAllFunctions(tree.decl()));
     addFunctionsToScope(visitor, functions)
+    if (visitor.type_errors.length) {
+        return new TypeErrorsReport(
+            visitor.type_errors,
+            collector.getExtensions(tree),
+            findAllFunctions(tree.decl()).map(i => i.children?.[1]?.text)
+        )
+    }
+
     for (let [name, f] of Object.entries(functions)) {
-        visitor.visitDeclFun(f)
+        if (f instanceof DeclFunContext) {
+            visitor.visitDeclFun(f)
+        } else {
+            visitor.visitDeclFunGeneric(f)
+        }
         errors.push(...visitor.type_errors);
     }
     if (errors.length) {
@@ -140,24 +172,25 @@ export function parseAndTypecheck(text: string): SyntaxErrorReport | TypeErrorsR
             errorListener.syntaxErrors
         )
     }
-    return checkProgram(parser, tree);
+    return checkProgram(parser, tree).addSource(text);
 }
 
 function findMainFn(tree: ProgramContext): DeclFunContext | undefined {
     return tree.decl()?.find(i => i.children?.[0].text === "fn" && i.children?.[1].text === "main") as DeclFunContext
 }
 
-export function findAllFunctions(decls: DeclContext[]): DeclFunContext[] {
-    return decls.filter(i => i.children?.[0].text === "fn") as DeclFunContext[]
+export function findAllFunctions(decls: DeclContext[]): (DeclFunContext | DeclFunGenericContext)[] {
+    return decls.filter(i => i.children?.[0].text === "fn" || i.children?.[0].text === "generic") as (DeclFunContext | DeclFunGenericContext)[]
 }
 
-export function addFunctionsToScope(visitor: stellaParserVisitorImpl, functions: { [p: string]: DeclFunContext }) {
+export function addFunctionsToScope(visitor: stellaParserVisitorImpl, functions: { [p: string]: (DeclFunContext | DeclFunGenericContext) }) {
     for (let [name, f] of Object.entries(functions)) {
-        visitor.addToScope(name, TypesCollector.extractFunctionTypes(f, visitor))
+        const functionType = TypesCollector.extractFunctionTypes(f, visitor)
+        visitor.addToScope(name, functionType)
         f.accept(visitor)
     }
 }
 
-export function makeFunctionsMap(functions: DeclFunContext[] ) {
+export function makeFunctionsMap(functions: (DeclFunContext | DeclFunGenericContext)[] ) {
     return Object.fromEntries(functions.map(f => [TypesCollector.extractName(f), f]))
 }

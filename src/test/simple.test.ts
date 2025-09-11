@@ -112,8 +112,22 @@ fn main(n : Nat) -> Nat {
   return n(foo(true))
 }
 `);
-    expect(res).instanceof(TypeErrorsReport);
     expectTypeError(res, error_type.ERROR_NOT_A_FUNCTION)
+})
+
+test('return_type', () => {
+    const res = parseAndTypecheck(`
+language core;
+
+fn foo(arg : Nat) -> Bool {
+    return false
+}
+
+fn main(n : Nat) -> Nat {
+  return foo(0)
+}
+`);
+    expectTypeError(res, error_type.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION)
 })
 
 test('not_fun2', () => {

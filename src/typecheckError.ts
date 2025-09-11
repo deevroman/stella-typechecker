@@ -51,7 +51,12 @@ export enum error_type {
 
     ERROR_EXCEPTION_TYPE_NOT_DECLARED = "ERROR_EXCEPTION_TYPE_NOT_DECLARED",
     ERROR_AMBIGUOUS_THROW_TYPE = "ERROR_AMBIGUOUS_THROW_TYPE",
-    ERROR_AMBIGUOUS_PANIC_TYPE = "ERROR_AMBIGUOUS_PANIC_TYPE"
+    ERROR_AMBIGUOUS_PANIC_TYPE = "ERROR_AMBIGUOUS_PANIC_TYPE",
+
+    ERROR_NOT_A_GENERIC_FUNCTION = "ERROR_NOT_A_GENERIC_FUNCTION",
+    ERROR_INCORRECT_NUMBER_OF_TYPE_ARGUMENTS = "ERROR_INCORRECT_NUMBER_OF_TYPE_ARGUMENTS",
+    ERROR_UNDEFINED_TYPE_VARIABLE = "ERROR_UNDEFINED_TYPE_VARIABLE",
+
 }
 
 export class TypecheckError {
@@ -63,5 +68,6 @@ export class TypecheckError {
         this.type = type;
         this.token = token;
         this.tokenString = token?.text;
+        Error.captureStackTrace(this, this.constructor)
     }
 }

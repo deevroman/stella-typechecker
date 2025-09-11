@@ -1,8 +1,9 @@
 import {expect, test} from 'vitest'
-import {parseAndTypecheck} from "../typechecker";
+import {GoodReport, parseAndTypecheck} from "../typechecker";
 
 import * as fs from 'fs'
 import * as path from 'path'
+import {expectGood} from "./utils-for-tests";
 
 const TEST_DIR = path.resolve(__dirname, './stella-tests/ok')
 
@@ -14,11 +15,5 @@ test.each(files)('ok/$name', ({name, fullPath}) => {
     console.log(new URL("file://" + fullPath).toString());
     const source = fs.readFileSync(fullPath, 'utf-8')
     const result = parseAndTypecheck(source)
-    try {
-        expect(result.ok).toBe(true)
-    } catch (e) {
-        console.log(source);
-        console.error(result);
-        throw e
-    }
+    expectGood(result)
 })

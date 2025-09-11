@@ -31,5 +31,4 @@ test.each(files)('$error_type/$name', ({error_type, name, fullPath}) => {
     const firstError = (result as TypeErrorsReport).errors[0].type
     console.log(firstError)
     expect(allowedErrors).toContain(firstError)
-    debugger
 })

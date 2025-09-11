@@ -334,6 +334,22 @@ fn main(n : Nat) -> Nat {
 
 test('record_duplicate_in_arg', () => {
     const res = parseAndTypecheck(`
+    language core;
+extend with #records;
+
+fn foo(x : { fst : Nat, fst : Nat, thd : Bool }) -> Nat {
+  return x.fst
+}
+
+fn main(n : Nat) -> Nat {
+  return foo({ fst = 0, snd = 0, thd = true })
+}
+`);
+    expectTypeError(res, error_type.ERROR_DUPLICATE_RECORD_FIELDS)
+})
+
+test('record_duplicate_in_ret', () => {
+    const res = parseAndTypecheck(`
 language core;
 
 extend with #records;
