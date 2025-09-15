@@ -5,7 +5,8 @@ extend with
   #references,
   #arithmetic-operators,
   #sequencing,
-  #natural-literals;
+  #natural-literals,
+  #multiparameter-functions;
   
 fn main(n : Nat) -> Nat {
   return factorial(n)

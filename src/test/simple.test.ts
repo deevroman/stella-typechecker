@@ -1,5 +1,5 @@
 import {expect, test} from 'vitest'
-import {SyntaxErrorReport, parseAndTypecheck, TypeErrorsReport, GoodReport} from "../typechecker";
+import {parseAndTypecheck, SyntaxErrorReport, TypeErrorsReport} from "../typechecker";
 import {example} from "../examples";
 import {tokenInfo} from "../utils";
 import {error_type} from "../typecheckError";
@@ -8,6 +8,10 @@ import {expectGood, expectTypeError} from "./utils-for-tests";
 
 test('smoke', () => {
     expect(parseAndTypecheck(example).ok).toBe(false)
+})
+
+test('smoke_check_error_type', () => {
+    expectTypeError(parseAndTypecheck(example), error_type.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION)
 })
 
 test('main not found', () => {

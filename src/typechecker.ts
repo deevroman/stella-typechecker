@@ -120,7 +120,7 @@ function checkProgram(parser: stellaParser, tree: ProgramContext) {
         visitor.exceptionType = new StellaVariant(variantEntities)
     }
 
-    const functions = makeFunctionsMap(findAllFunctions(tree.decl()));
+    const functions = makeFunctionsList(findAllFunctions(tree.decl()));
     addFunctionsToScope(visitor, functions)
     if (visitor.type_errors.length) {
         return new TypeErrorsReport(
@@ -130,7 +130,7 @@ function checkProgram(parser: stellaParser, tree: ProgramContext) {
         )
     }
 
-    for (let [name, f] of Object.entries(functions)) {
+    for (let [name, f] of functions) {
         if (f instanceof DeclFunContext) {
             visitor.visitDeclFun(f)
         } else {
@@ -188,14 +188,14 @@ export function findAllFunctions(decls: DeclContext[]): (DeclFunContext | DeclFu
     return decls.filter(i => i.children?.[0].text === "fn" || i.children?.[0].text === "generic") as (DeclFunContext | DeclFunGenericContext)[]
 }
 
-export function addFunctionsToScope(visitor: stellaParserVisitorImpl, functions: { [p: string]: (DeclFunContext | DeclFunGenericContext) }) {
-    for (let [name, f] of Object.entries(functions)) {
+export function addFunctionsToScope(visitor: stellaParserVisitorImpl, functions: [string, (DeclFunContext | DeclFunGenericContext)][]) {
+    for (let [name, f] of functions) {
         const functionType = TypesCollector.extractFunctionTypes(f, visitor)
         visitor.addToScope(name, functionType)
-        f.accept(visitor)
+        // f.accept(visitor)
     }
 }
 
-export function makeFunctionsMap(functions: (DeclFunContext | DeclFunGenericContext)[] ) {
-    return Object.fromEntries(functions.map(f => [TypesCollector.extractName(f), f]))
+export function makeFunctionsList(functions: (DeclFunContext | DeclFunGenericContext)[] ) : [string, (DeclFunContext | DeclFunGenericContext)][] {
+    return functions.map(f => [TypesCollector.extractName(f), f])
 }

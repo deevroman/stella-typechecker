@@ -137,7 +137,7 @@ import {
     StellaType,
     StellaVariant
 } from "./typecheckTypes";
-import {addFunctionsToScope, findAllFunctions, makeFunctionsMap} from "./typechecker";
+import {addFunctionsToScope, findAllFunctions, makeFunctionsList} from "./typechecker";
 import {checkNoexhaustiveMatch} from "./noexhaustive-match-utils";
 
 export class stellaParserVisitorImpl implements stellaParserVisitor<void> {
@@ -488,7 +488,15 @@ export class stellaParserVisitorImpl implements stellaParserVisitor<void> {
     visitDeclFun(ctx: DeclFunContext): void {
         this.openScope()
         ctx.paramDecl().forEach(i => this.visitParamDecl(i))
-        addFunctionsToScope(this, makeFunctionsMap(findAllFunctions(ctx.decl())))
+        const functions = makeFunctionsList(findAllFunctions(ctx.decl()))
+        addFunctionsToScope(this, functions)
+        for (let [name, f] of functions) {
+            if (f instanceof DeclFunContext) {
+                this.visitDeclFun(f)
+            } else {
+                this.visitDeclFunGeneric(f)
+            }
+        }
         const returnTypeFromContext = (this.nameInScope(ctx._name.text!) as StellaFunction)?.returnType
 
         this.addContextType(returnTypeFromContext)
@@ -507,7 +515,7 @@ export class stellaParserVisitorImpl implements stellaParserVisitor<void> {
         debugger
         this.openScope()
         ctx.paramDecl().forEach(i => this.visitParamDecl(i))
-        addFunctionsToScope(this, makeFunctionsMap(findAllFunctions(ctx.decl())))
+        addFunctionsToScope(this, makeFunctionsList(findAllFunctions(ctx.decl())))
         const returnTypeFromContext = (this.nameInScope(ctx._name.text!) as StellaFunction)?.returnType
 
         this.addContextType(returnTypeFromContext)
