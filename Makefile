@@ -11,5 +11,5 @@ parser:
 build_cli:
 	npx webpack --config webpack.config.js --name cli
 
-cli: build_cli
+cli:
 	node dist_cli/cli.js

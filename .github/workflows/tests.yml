@@ -16,11 +16,25 @@ jobs:
           cache-dependency-path: ./package-lock.json
 
       - name: Install deps
-        working-directory: ./app
+        working-directory: ./
         run: |
-          npm i
+          npm ci
+          
+
+      - name: Build CLI
+        working-directory: ./
+        run: |
+          make build_cli
+          echo "language core; fn main(n : Nat) -> Nat { return 0 }" | make cli
+          echo "language core; fn main(n : Nat) -> Nat { return false }" | make cli && { exit 1; } || exit 0
+
+      - name: Deploy 🚀
+        uses: JamesIves/github-pages-deploy-action@v4
+        with:
+          folder: ./dist
+          token: ${{ secrets.DEPLOY_TOKEN }}
 
       - name: Run tests
-        working-directory: ./app
+        working-directory: ./
         run: |
           CI=true npm test
