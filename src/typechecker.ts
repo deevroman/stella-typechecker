@@ -126,7 +126,9 @@ function checkProgram(parser: stellaParser, tree: ProgramContext) {
         return new TypeErrorsReport(
             visitor.type_errors,
             collector.getExtensions(tree),
-            findAllFunctions(tree.decl()).map(i => i.children?.[1]?.text)
+            {
+                functionsList: findAllFunctions(tree.decl()).map(i => i.children?.[1]?.text)
+            }
         )
     }
 
@@ -142,15 +144,18 @@ function checkProgram(parser: stellaParser, tree: ProgramContext) {
         return new TypeErrorsReport(
             errors,
             collector.getExtensions(tree),
-            findAllFunctions(tree.decl()).map(i => i.children?.[1]?.text)
+            {
+                functionsList: findAllFunctions(tree.decl()).map(i => i.children?.[1]?.text)
+            }
         )
     } else {
         return new GoodReport(
             collector.getExtensions(tree),
-            [
-                findAllFunctions(tree.decl()).map(i => i.children?.[1]?.text),
-                findAllFunctions(tree.decl()).map(i => i.children?.[1]?.toStringTree()),
-            ]
+            {
+                functionsList: findAllFunctions(tree.decl()).map(i => i.children?.[1]?.text),
+                // findAllFunctions(tree.decl()).map(i => i.children?.[1]?.toStringTree()),
+                typeVars: visitor.typeVars
+            }
         )
     }
 }
@@ -173,10 +178,10 @@ export function parseAndTypecheck(text: string): SyntaxErrorReport | TypeErrorsR
         )
     }
     // try { // todo
-        return checkProgram(parser, tree).addSource(text);
+    return checkProgram(parser, tree).addSource(text);
     // } catch (e) {
 
-        // return new GoodReport([], undefined)
+    // return new GoodReport([], undefined)
     // }
 }
 
@@ -196,6 +201,6 @@ export function addFunctionsToScope(visitor: stellaParserVisitorImpl, functions:
     }
 }
 
-export function makeFunctionsList(functions: (DeclFunContext | DeclFunGenericContext)[] ) : [string, (DeclFunContext | DeclFunGenericContext)][] {
+export function makeFunctionsList(functions: (DeclFunContext | DeclFunGenericContext)[]): [string, (DeclFunContext | DeclFunGenericContext)][] {
     return functions.map(f => [TypesCollector.extractName(f), f])
 }

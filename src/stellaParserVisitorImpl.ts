@@ -123,6 +123,7 @@ import {ErrorNode, ParseTree, RuleNode} from "antlr4ts/tree";
 import {TerminalNode} from "antlr4ts/tree/TerminalNode";
 import {error_type, TypecheckError} from "./typecheckError";
 import {
+    StellaAuto,
     StellaBot,
     StellaEntityRecord,
     StellaEntityVariant,
@@ -139,6 +140,7 @@ import {
 } from "./typecheckTypes";
 import {addFunctionsToScope, findAllFunctions, makeFunctionsList} from "./typechecker";
 import {checkNoexhaustiveMatch} from "./noexhaustive-match-utils";
+import {type} from "node:os";
 
 export class stellaParserVisitorImpl implements stellaParserVisitor<void> {
     scopes: { [p: string]: StellaType | undefined }[] = [{}];
@@ -153,6 +155,16 @@ export class stellaParserVisitorImpl implements stellaParserVisitor<void> {
     typeReconstruction: boolean = false;
     maxIntInProgram: number = 0;
     maxListLenInProgram: number = 0;
+    typeVars: { [id: number]: StellaAuto } = {};
+    private constraints: { left: StellaType, right: StellaType }[] = [];
+
+    addConstraint(left: StellaType, right: StellaType) {
+        this.constraints.push({left: left, right: right})
+    }
+
+    storeTypeVar(typeVar: StellaAuto) {
+        this.typeVars[typeVar.typeVarID] = typeVar
+    }
 
     constructor(extensions: string[] = []) {
         this.extensions = extensions;
@@ -254,8 +266,9 @@ export class stellaParserVisitorImpl implements stellaParserVisitor<void> {
         debugger;
         this.openScope()
         const contextType = this.getContextType()
-        if (contextType && !(contextType instanceof StellaFunction)) {
+        if (contextType && !(contextType instanceof StellaFunction) && !(contextType instanceof StellaAuto)) {
             this.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION))
+            return
         }
         if (contextType && contextType instanceof StellaFunction) {
             if (contextType.argsTypes.length !== ctx.paramDecl().length) {
@@ -345,6 +358,9 @@ export class stellaParserVisitorImpl implements stellaParserVisitor<void> {
                     }
                 }
                 return type.returnType;
+            } else if (type instanceof StellaAuto) {
+                debugger
+                return type
             } else {
                 this.addError(new TypecheckError(error_type.ERROR_NOT_A_FUNCTION));
             }
@@ -673,9 +689,14 @@ export class stellaParserVisitorImpl implements stellaParserVisitor<void> {
 
     visitIf(ctx: IfContext): StellaType | undefined {
         this.addContextType(new StellaType("BOOL_TYPE"))
-        const type = this.visitExpr(ctx._condition)
+        const condType = this.visitExpr(ctx._condition)
         this.dropContextType()
-        if (type?.type !== "BOOL_TYPE") {
+        if (condType === undefined) {
+            return
+        }
+        if (condType instanceof StellaAuto) {
+            this.addConstraint(condType, new StellaType("BOOL_TYPE"))
+        } else if (condType.type !== "BOOL_TYPE") {
             this.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION))
         }
         const thenType = this.visitExpr(ctx._thenExpr)
@@ -706,7 +727,7 @@ export class stellaParserVisitorImpl implements stellaParserVisitor<void> {
 
     visitInl(ctx: InlContext): StellaType | undefined {
         const contextType = this.getContextType();
-        if (!contextType) {
+        if (contextType === undefined) {
             if (this.ambiguousTypeAsBottom) {
                 this.addContextType(undefined)
                 const type = this.visitExpr(ctx._expr_);
@@ -714,25 +735,44 @@ export class stellaParserVisitorImpl implements stellaParserVisitor<void> {
                 if (type) {
                     return new StellaSumType(type, new StellaBot())
                 }
+            } else if (this.typeReconstruction) {
+                this.addContextType(undefined)
+                const type = this.visitExpr(ctx._expr_);
+                this.dropContextType()
+                if (type) {
+                    return new StellaSumType(type, StellaAuto.makeNewTypeVar())
+                }
             } else {
                 this.addError(new TypecheckError(error_type.ERROR_AMBIGUOUS_SUM_TYPE))
             }
-        } else if (!(contextType instanceof StellaSumType)) {
+            return
+        }
+        if (!(contextType instanceof StellaSumType) && !(contextType instanceof StellaAuto)) {
             this.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_INJECTION))
             return undefined
-        } else {
-            this.addContextType(contextType.leftType!)
-            const type = this.visitExpr(ctx._expr_)
-            this.dropContextType()
-            if (contextType.leftType) {
-                if (type) {
-                    type.tryAssignTo(contextType.leftType, this)
-                } else {
-                    this.addError(new TypecheckError(error_type.ERROR_AMBIGUOUS_SUM_TYPE))
-                }
-            }
-            return contextType
         }
+        if (contextType instanceof StellaAuto) {
+            this.addContextType(undefined)
+            const type = this.visitExpr(ctx._expr_);
+            this.dropContextType()
+            if (type) {
+                const typeVar = StellaAuto.makeNewTypeVar()
+                this.addConstraint(contextType, typeVar)
+                return new StellaSumType(type, typeVar)
+            }
+            return
+        }
+        this.addContextType(contextType.leftType!)
+        const type = this.visitExpr(ctx._expr_)
+        this.dropContextType()
+        if (contextType.leftType) {
+            if (type) {
+                type.tryAssignTo(contextType.leftType, this)
+            } else {
+                this.addError(new TypecheckError(error_type.ERROR_AMBIGUOUS_SUM_TYPE))
+            }
+        }
+        return contextType
     }
 
     visitInlineAnnotation(ctx: InlineAnnotationContext): void {
@@ -742,7 +782,7 @@ export class stellaParserVisitorImpl implements stellaParserVisitor<void> {
 
     visitInr(ctx: InrContext): StellaType | undefined {
         const contextType = this.getContextType();
-        if (!contextType) {
+        if (contextType === undefined) {
             if (this.ambiguousTypeAsBottom) {
                 this.addContextType(undefined)
                 const type = this.visitExpr(ctx._expr_);
@@ -750,25 +790,44 @@ export class stellaParserVisitorImpl implements stellaParserVisitor<void> {
                 if (type) {
                     return new StellaSumType(new StellaBot(), type)
                 }
+            } else if (this.typeReconstruction) {
+                this.addContextType(undefined)
+                const type = this.visitExpr(ctx._expr_);
+                this.dropContextType()
+                if (type) {
+                    return new StellaSumType(StellaAuto.makeNewTypeVar(), type)
+                }
             } else {
                 this.addError(new TypecheckError(error_type.ERROR_AMBIGUOUS_SUM_TYPE))
             }
-        } else if (!(contextType instanceof StellaSumType)) {
+            return
+        }
+        if (!(contextType instanceof StellaSumType) && !(contextType instanceof StellaAuto)) {
             this.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_INJECTION))
             return undefined
-        } else {
-            this.addContextType(contextType.rightType!)
+        }
+        if (contextType instanceof StellaAuto) {
+            this.addContextType(undefined)
             const type = this.visitExpr(ctx._expr_);
             this.dropContextType()
-            if (contextType.rightType) {
-                if (type) {
-                    type.tryAssignTo(contextType.rightType, this)
-                } else {
-                    this.addError(new TypecheckError(error_type.ERROR_AMBIGUOUS_SUM_TYPE))
-                }
+            if (type) {
+                const typeVar = StellaAuto.makeNewTypeVar()
+                this.addConstraint(contextType, typeVar)
+                return new StellaSumType(typeVar, type)
             }
-            return contextType
+            return
         }
+        this.addContextType(contextType.rightType!)
+        const type = this.visitExpr(ctx._expr_);
+        this.dropContextType()
+        if (contextType.rightType) {
+            if (type) {
+                type.tryAssignTo(contextType.rightType, this)
+            } else {
+                this.addError(new TypecheckError(error_type.ERROR_AMBIGUOUS_SUM_TYPE))
+            }
+        }
+        return contextType
     }
 
     visitIsEmpty(ctx: IsEmptyContext): StellaType {
@@ -968,11 +1027,13 @@ export class stellaParserVisitorImpl implements stellaParserVisitor<void> {
             const value = this.visitExpr(_case._expr_) as StellaType | undefined
             if (value) {
                 if (returnTypes.length > 0) {
-                    if (returnTypes[0].type !== value.type) {
-                        if (value instanceof StellaList) {
-                            this.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_LIST))
-                        } else {
-                            this.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION))
+                    if (!(returnTypes[0] instanceof StellaAuto)) {
+                        if (returnTypes[0].type !== value.type) {
+                            if (value instanceof StellaList) {
+                                this.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_LIST))
+                            } else {
+                                this.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION))
+                            }
                         }
                     }
                 }
@@ -1043,7 +1104,13 @@ export class stellaParserVisitorImpl implements stellaParserVisitor<void> {
             //     return returnTypes[0]
             // }
             default:
-                checkNoexhaustiveMatch(matchType, matchedTypeVariants, this)
+                try {
+                    checkNoexhaustiveMatch(matchType, matchedTypeVariants, this)
+                } catch (e) {
+                    if (e !== "NOT NEED") {
+                        throw e
+                    }
+                }
                 return returnTypes[0]
         }
         throw "Never shoud throw"
@@ -1060,23 +1127,41 @@ export class stellaParserVisitorImpl implements stellaParserVisitor<void> {
         return undefined;
     }
 
-    visitNatRec(ctx: NatRecContext): StellaType {
+    visitNatRec(ctx: NatRecContext): StellaType | undefined {
         const nType = ctx._n.accept(this)! as StellaType
-        if (nType.type !== "NAT_TYPE") {
+        if (nType.type !== "NAT_TYPE" && !(nType instanceof StellaAuto)) {
             this.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION))
         }
         const initialType = ctx._initial.accept(this)! as StellaType
         this.addContextType(undefined)
-        const stepType = ctx._step.accept(this)! as StellaType
+        const stepType = ctx._step.accept(this)! as StellaType | undefined
+        if (stepType === undefined) {
+            debugger
+            return
+        }
         this.dropContextType()
-        if (!(stepType instanceof StellaFunction)) {
-            this.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION))
+        if (stepType instanceof StellaAuto) {
+            debugger
+        } else if (!(stepType instanceof StellaFunction)) {
+            if (stepType instanceof StellaAuto) {
+                debugger
+            } else {
+                this.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION))
+            }
         } else if (stepType.argsTypes.length !== 1) {
             this.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_NUMBER_OF_PARAMETERS_IN_LAMBDA))
         } else if (stepType.argsTypes[0].type !== "NAT_TYPE") {
-            this.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION))
+            if (stepType.argsTypes[0] instanceof StellaAuto) {
+                debugger
+            } else {
+                this.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION))
+            }
         } else if ((!(stepType.returnType instanceof StellaFunction))) {
-            this.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION))
+            if (stepType.returnType instanceof StellaAuto) {
+
+            } else {
+                this.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION))
+            }
         } else if (!stepType.returnType.isEqualType(new StellaFunction([initialType], initialType))) {
             this.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION))
         }
@@ -1224,6 +1309,17 @@ export class stellaParserVisitorImpl implements stellaParserVisitor<void> {
             } finally {
                 this.dropPatternType()
             }
+        } else if (patternType instanceof StellaAuto) {
+            this.addPatternType(new StellaAuto())
+            try {
+                const type = ctx._pattern_.accept(this) as StellaType | undefined
+                if (type === undefined) {
+                    return;
+                }
+                return new StellaSumType(type, new StellaType("_INCOMPLETED_SUM_TYPE_FILLER"))
+            } finally {
+                this.dropPatternType()
+            }
         } else {
             this.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_PATTERN_FOR_TYPE))
         }
@@ -1234,6 +1330,17 @@ export class stellaParserVisitorImpl implements stellaParserVisitor<void> {
         const patternType = this.getPatternType()
         if (patternType instanceof StellaSumType) {
             this.addPatternType(patternType.rightType!)
+            try {
+                const type = ctx._pattern_.accept(this) as StellaType | undefined
+                if (type === undefined) {
+                    return;
+                }
+                return new StellaSumType(new StellaType("_INCOMPLETED_SUM_TYPE_FILLER"), type)
+            } finally {
+                this.dropPatternType()
+            }
+        } else if (patternType instanceof StellaAuto) {
+            this.addPatternType(new StellaAuto())
             try {
                 const type = ctx._pattern_.accept(this) as StellaType | undefined
                 if (type === undefined) {
@@ -1734,7 +1841,15 @@ export class stellaParserVisitorImpl implements stellaParserVisitor<void> {
     }
 
     visitTypeAuto(ctx: TypeAutoContext): StellaType {
-        return new StellaType("AUTO_TYPE"); // todo
+        // throw "!!!!!!!!"
+        if (ctx.typeVarID) {
+            debugger
+            return this.typeVars[ctx.typeVarID]
+        }
+        const typeVar = StellaAuto.makeNewTypeVar();
+        this.storeTypeVar(typeVar)
+        ctx.typeVarID = typeVar.typeVarID
+        return typeVar
     }
 
     visitTypeBool(ctx: TypeBoolContext): StellaType {

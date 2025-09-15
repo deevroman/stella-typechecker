@@ -96,6 +96,10 @@ export class StellaType {
     }
 
     tryAssignTo(oth: StellaType, ctx: stellaParserVisitorImpl): void {
+        if (oth instanceof StellaAuto) {
+            ctx.addConstraint(this, oth)
+            return;
+        }
         if (ctx.subtypingEnabled && oth instanceof StellaTop) {
             return
         }
@@ -116,6 +120,36 @@ export class StellaType {
     }
 }
 
+export class StellaAuto extends StellaType {
+    readonly type: StellaTypeEnum = "AUTO_TYPE";
+    value: string | undefined = undefined;
+    isEqualValue: boolean = true;
+    addr: string = ""; // todo cleanup
+    genericsList: StellaGenericVarType[] = [];
+    varName = "";
+    typeVarID: number = 0;
+
+    constructor() {
+        super()
+        this.type = "AUTO_TYPE";
+    }
+
+    private static freshVarCounter = 1;
+
+    addFreshTypeVar() {
+        this.typeVarID = StellaAuto.freshVarCounter
+        StellaAuto.freshVarCounter++
+        return this;
+    }
+
+    static makeNewTypeVar() : StellaAuto {
+        return new StellaAuto().addFreshTypeVar()
+    }
+
+    tryAssignTo(oth: StellaType, ctx: stellaParserVisitorImpl) {
+        ctx.addConstraint(this, oth)
+    }
+}
 
 export class StellaGenericVarType extends StellaType {
     readonly type: StellaTypeEnum = "GENERIC_TYPE";
@@ -145,6 +179,10 @@ export class StellaGenericVarType extends StellaType {
     }
 
     tryAssignTo(oth: StellaType, ctx: stellaParserVisitorImpl): void {
+        // if (oth instanceof StellaAuto) {
+        //     ctx.addConstraint(this, oth)
+        //     return;
+        // }
         if (ctx.subtypingEnabled && oth instanceof StellaTop) {
             return
         }
@@ -202,6 +240,10 @@ export class StellaFunction extends StellaType {
 
 
     tryAssignTo(oth: StellaType, ctx: stellaParserVisitorImpl): void {
+        if (oth instanceof StellaAuto) {
+            ctx.addConstraint(this, oth)
+            return;
+        }
         if (ctx.subtypingEnabled && oth instanceof StellaTop) {
             return
         }
@@ -305,6 +347,10 @@ export class StellaList extends StellaType {
     }
 
     tryAssignTo(oth: StellaType, ctx: stellaParserVisitorImpl) {
+        if (oth instanceof StellaAuto) {
+            ctx.addConstraint(this, oth)
+            return;
+        }
         if (ctx.subtypingEnabled && oth instanceof StellaTop) {
             return
         }
@@ -343,6 +389,10 @@ export class StellaRef extends StellaType {
     }
 
     tryAssignTo(oth: StellaType, ctx: stellaParserVisitorImpl) {
+        if (oth instanceof StellaAuto) {
+            ctx.addConstraint(this, oth)
+            return;
+        }
         if (ctx.subtypingEnabled && oth instanceof StellaTop) {
             return
         }
@@ -405,6 +455,10 @@ export class StellaSumType extends StellaType {
     }
 
     tryAssignTo(oth: StellaType, ctx: stellaParserVisitorImpl) {
+        if (oth instanceof StellaAuto) {
+            ctx.addConstraint(this, oth)
+            return;
+        }
         if (ctx.subtypingEnabled && oth instanceof StellaTop) {
             return
         }
@@ -452,6 +506,10 @@ export class StellaTuple extends StellaType {
     }
 
     tryAssignTo(oth: StellaType, ctx: stellaParserVisitorImpl) {
+        if (oth instanceof StellaAuto) {
+            ctx.addConstraint(this, oth)
+            return;
+        }
         if (ctx.subtypingEnabled && oth instanceof StellaTop) {
             return
         }
@@ -530,6 +588,10 @@ export class StellaRecord extends StellaType {
     }
 
     tryAssignTo(oth: StellaType, ctx: stellaParserVisitorImpl): void {
+        if (oth instanceof StellaAuto) {
+            ctx.addConstraint(this, oth)
+            return;
+        }
         if (ctx.subtypingEnabled && oth instanceof StellaTop) {
             return
         }
@@ -685,6 +747,10 @@ export class StellaVariant extends StellaType {
     }
 
     tryAssignTo(oth: StellaType, ctx: stellaParserVisitorImpl): void {
+        if (oth instanceof StellaAuto) {
+            ctx.addConstraint(this, oth)
+            return;
+        }
         if (ctx.subtypingEnabled && oth instanceof StellaTop) {
             return
         }
@@ -755,6 +821,10 @@ export class StellaTop extends StellaType {
     }
 
     tryAssignTo(oth: StellaType, ctx: stellaParserVisitorImpl): void {
+        if (oth instanceof StellaAuto) {
+            ctx.addConstraint(this, oth)
+            return;
+        }
         if (oth instanceof StellaTop) {
             return
         }
@@ -770,6 +840,10 @@ export class StellaBot extends StellaType {
     }
 
     tryAssignTo(oth: StellaType, ctx: stellaParserVisitorImpl): void {
+        if (oth instanceof StellaAuto) {
+            ctx.addConstraint(this, oth)
+            return;
+        }
         if (ctx.subtypingEnabled) {
             return;
         } else {

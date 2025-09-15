@@ -1,5 +1,6 @@
 import {error_type, TypecheckError} from "./typecheckError";
 import {
+    StellaAuto,
     StellaEntityRecord,
     StellaEntityVariant,
     StellaFunction,
@@ -14,6 +15,9 @@ import {stellaParserVisitorImpl} from "./stellaParserVisitorImpl";
 export function checkNoexhaustiveMatch(expectedType: StellaType, cases: StellaType[], ctx: stellaParserVisitorImpl): boolean {
     if (cases.some(_case => _case.varName === "_")) {
         return true
+    }
+    if (cases.some(_case => _case instanceof StellaAuto)) {
+        return true // hack
     }
     const constructors = getAllConstructors(expectedType, ctx)
     for (let i = 0; i < constructors.length; i++){
@@ -75,6 +79,9 @@ function firstConstructor(type: StellaType): StellaType {
     }
     if (type instanceof StellaRecord) {
         return new StellaRecord(type.entities.map(([label, value]) => new StellaEntityVariant(label, firstConstructor(value))))  // todo тест что firstConstructor не забыт
+    }
+    if (type instanceof StellaAuto) {
+        throw "NOT NEED"
     }
     debugger
     throw "Unsupported"
