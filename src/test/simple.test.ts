@@ -68,7 +68,7 @@ extend with #nested-function-declarations;
 
 fn main(n : Nat) -> Nat {
   fn nested(x : Nat) -> Bool {
-   \treturn if (Nat::iszero(x)) then Nat::iszero(n) else false
+     return if (Nat::iszero(x)) then Nat::iszero(n) else false
   }
 
   return if (nested(n)) then 0 else succ(0)
@@ -148,7 +148,6 @@ test('int_literal', () => {
 language core;
 
 extend with #natural-literals;
-
 
 fn main(n : Nat) -> Bool {
   return 5;

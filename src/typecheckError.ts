@@ -1,4 +1,5 @@
 import {Token} from "antlr4ts/Token";
+import {StellaAuto, StellaType} from "./typecheckTypes";
 
 export enum error_type {
     ERROR_MISSING_MAIN = "ERROR_MISSING_MAIN",
@@ -59,17 +60,41 @@ export enum error_type {
     ERROR_INCORRECT_NUMBER_OF_TYPE_ARGUMENTS = "ERROR_INCORRECT_NUMBER_OF_TYPE_ARGUMENTS",
     ERROR_UNDEFINED_TYPE_VARIABLE = "ERROR_UNDEFINED_TYPE_VARIABLE",
 
+    ERROR_OCCURS_CHECK_INFINITE_TYPE = "ERROR_OCCURS_CHECK_INFINITE_TYPE",
 }
 
 export class TypecheckError {
     type: error_type
     token: Token | undefined
-    private tokenString: string | undefined
+    tokenString: string | undefined
 
     constructor(type: error_type, token: Token | undefined = undefined) {
         this.type = type;
         this.token = token;
         this.tokenString = token?.text;
         Error.captureStackTrace(this, this.constructor)
+    }
+
+    prettyPrint(): string {
+        return ""
+    }
+}
+
+export class ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION extends TypecheckError {
+    expected: StellaType
+    actual: StellaType
+
+    constructor(expected: StellaType, actual: StellaType, expr: any = undefined) {
+        super(error_type.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION, undefined);
+        this.expected = expected
+        this.actual = actual
+    }
+
+    prettyPrint(): string {
+        return `ожидается тип
+  ${this.expected.prettyPrint()}
+но получен тип
+  ${this.actual.prettyPrint()}
+`
     }
 }

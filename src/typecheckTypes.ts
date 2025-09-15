@@ -118,6 +118,19 @@ export class StellaType {
     substituteGenerics(genericsMap: Record<string, StellaType>) : StellaType {
         return this
     }
+
+    prettyPrint() : string {
+        switch (this.type) {
+            case "UNIT_TYPE":
+                return "Unit"
+            case "BOOL_TYPE":
+                return "Bool"
+            case "NAT_TYPE":
+                return "Nat"
+            default:
+                return this.type
+        }
+    }
 }
 
 export class StellaAuto extends StellaType {
@@ -291,6 +304,10 @@ export class StellaFunction extends StellaType {
         // todo deduplicate
         return new StellaFunction(newArgs, newReturnType).addGenericsList(newRemainingGenerics)
     }
+
+    prettyPrint(): string {
+        return `fn (${this.argsTypes.map(i => i.prettyPrint()).join(", ")}) -> ${this.returnType.prettyPrint()}`;
+    }
 }
 
 export class StellaList extends StellaType {
@@ -370,6 +387,10 @@ export class StellaList extends StellaType {
         const newParameterType = this.parameterType.substituteGenerics(genericsMap)
         return new StellaList(newParameterType)
     }
+
+    prettyPrint(): string {
+        return `[${this.parameterType.prettyPrint()}]`;
+    }
 }
 
 export class StellaRef extends StellaType {
@@ -417,6 +438,10 @@ export class StellaRef extends StellaType {
     substituteGenerics(genericsMap: Record<string, StellaType>) : StellaType {
         const newParameterType = this.parameterType.substituteGenerics(genericsMap)
         return new StellaRef(newParameterType)
+    }
+
+    prettyPrint(): string {
+        return `&${this.parameterType.prettyPrint()}`;
     }
 }
 
@@ -478,6 +503,10 @@ export class StellaSumType extends StellaType {
         const newRightType = this.rightType!.substituteGenerics(genericsMap)
         return new StellaSumType(newLeftType, newRightType)
     }
+
+    prettyPrint(): string {
+        return `(${this.leftType!.prettyPrint() + this.rightType!.prettyPrint()})`;
+    }
 }
 
 export class StellaTuple extends StellaType {
@@ -535,6 +564,10 @@ export class StellaTuple extends StellaType {
             newElems.push(i.substituteGenerics(genericsMap))
         })
         return new StellaTuple(newElems)
+    }
+
+    prettyPrint(): string {
+        return `(${this.elems.map(i => i.prettyPrint()).join(", ")})`;
     }
 }
 
@@ -696,6 +729,12 @@ export class StellaRecord extends StellaType {
         })
         return new StellaRecord(newEntities)
     }
+
+    prettyPrint(): string {
+        return `(${this.entities.map(([label, t]) => {
+            return label + ":" + t.prettyPrint();
+        }).join(",\n")})`;
+    }
 }
 
 
@@ -811,6 +850,12 @@ export class StellaVariant extends StellaType {
         })
         return new StellaVariant(newEntities)
     }
+
+    prettyPrint(): string {
+        return `<| ${this.entities.map(([label, t]) => {
+            return label + ":" + t.prettyPrint();
+        }).join(", ")} |>`;
+    }
 }
 
 export class StellaTop extends StellaType {
@@ -829,6 +874,10 @@ export class StellaTop extends StellaType {
             return
         }
         ctx.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_SUBTYPE))
+    }
+
+    prettyPrint(): string {
+        return `Top`;
     }
 }
 
@@ -849,5 +898,9 @@ export class StellaBot extends StellaType {
         } else {
             ctx.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION))
         }
+    }
+
+    prettyPrint(): string {
+        return `Bot`;
     }
 }

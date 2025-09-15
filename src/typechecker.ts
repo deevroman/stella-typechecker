@@ -127,7 +127,8 @@ function checkProgram(parser: stellaParser, tree: ProgramContext) {
             visitor.type_errors,
             collector.getExtensions(tree),
             {
-                functionsList: findAllFunctions(tree.decl()).map(i => i.children?.[1]?.text)
+                functionsList: findAllFunctions(tree.decl()).map(i => i.children?.[1]?.text),
+                constraints: visitor.constraints
             }
         )
     }
@@ -140,12 +141,17 @@ function checkProgram(parser: stellaParser, tree: ProgramContext) {
         }
         errors.push(...visitor.type_errors);
     }
+    if (visitor.constraints.length) {
+        debugger
+    }
+
     if (errors.length) {
         return new TypeErrorsReport(
             errors,
             collector.getExtensions(tree),
             {
-                functionsList: findAllFunctions(tree.decl()).map(i => i.children?.[1]?.text)
+                functionsList: findAllFunctions(tree.decl()).map(i => i.children?.[1]?.text),
+                constraints: visitor.constraints
             }
         )
     } else {
@@ -154,7 +160,8 @@ function checkProgram(parser: stellaParser, tree: ProgramContext) {
             {
                 functionsList: findAllFunctions(tree.decl()).map(i => i.children?.[1]?.text),
                 // findAllFunctions(tree.decl()).map(i => i.children?.[1]?.toStringTree()),
-                typeVars: visitor.typeVars
+                typeVars: visitor.typeVars,
+                constraints: visitor.constraints
             }
         )
     }

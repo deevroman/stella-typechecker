@@ -121,7 +121,7 @@ import {
 import {stellaParserVisitor} from "./gen/generic-main-antlr/antlr/stellaParserVisitor";
 import {ErrorNode, ParseTree, RuleNode} from "antlr4ts/tree";
 import {TerminalNode} from "antlr4ts/tree/TerminalNode";
-import {error_type, TypecheckError} from "./typecheckError";
+import {error_type, ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION, TypecheckError} from "./typecheckError";
 import {
     StellaAuto,
     StellaBot,
@@ -156,7 +156,7 @@ export class stellaParserVisitorImpl implements stellaParserVisitor<void> {
     maxIntInProgram: number = 0;
     maxListLenInProgram: number = 0;
     typeVars: { [id: number]: StellaAuto } = {};
-    private constraints: { left: StellaType, right: StellaType }[] = [];
+    constraints: { left: StellaType, right: StellaType }[] = [];
 
     addConstraint(left: StellaType, right: StellaType) {
         this.constraints.push({left: left, right: right})
@@ -335,8 +335,10 @@ export class stellaParserVisitorImpl implements stellaParserVisitor<void> {
                 return type.returnType
             } else if (type && type.type === "LIST_TYPE") {
                 this.addError(new TypecheckError(error_type.ERROR_AMBIGUOUS_LIST_TYPE, funToken));
-            } else if (!type) {
+            } else if (type === undefined) {
                 this.addError(new TypecheckError(error_type.ERROR_UNDEFINED_VARIABLE, funToken));
+            } else if (type instanceof StellaAuto) {
+                return type
             } else {
                 this.addError(new TypecheckError(error_type.ERROR_NOT_A_FUNCTION, funToken));
             }
@@ -631,8 +633,18 @@ export class stellaParserVisitorImpl implements stellaParserVisitor<void> {
     }
 
     visitFix(ctx: FixContext): StellaType | undefined {
-        this.addContextType(undefined)
-        const argType = this.visitExpr(ctx._expr_) as StellaType
+        const contextType = this.getContextType()
+        let newContextType;
+        if (contextType instanceof StellaAuto) {
+            newContextType = new StellaFunction([StellaAuto.makeNewTypeVar()], StellaAuto.makeNewTypeVar())
+        } else {
+            this.addContextType(undefined)
+        }
+        this.addContextType(newContextType)
+        const argType = this.visitExpr(ctx._expr_) as StellaType | undefined
+        if (newContextType instanceof StellaAuto && argType) {
+            this.addConstraint(newContextType, argType)
+        }
         this.dropContextType()
         if (argType instanceof StellaFunction) {
             const fixT = argType.argsTypes![0]
@@ -643,6 +655,11 @@ export class stellaParserVisitorImpl implements stellaParserVisitor<void> {
             } else {
                 return fixT;
             }
+        } else if (argType instanceof StellaAuto) {
+            if (newContextType) {
+                this.addConstraint(newContextType, argType)
+            }
+            return argType
         } else {
             this.addError(new TypecheckError(error_type.ERROR_NOT_A_FUNCTION))
         }
@@ -697,7 +714,8 @@ export class stellaParserVisitorImpl implements stellaParserVisitor<void> {
         if (condType instanceof StellaAuto) {
             this.addConstraint(condType, new StellaType("BOOL_TYPE"))
         } else if (condType.type !== "BOOL_TYPE") {
-            this.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION))
+            // this.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION))
+            this.addError(new ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION(new StellaType("BOOL_TYPE"), condType))
         }
         const thenType = this.visitExpr(ctx._thenExpr)
         let elseType;

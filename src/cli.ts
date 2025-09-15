@@ -8,7 +8,8 @@ if (report.ok) {
     process.exit(0)
 } else {
     if (report instanceof TypeErrorsReport) {
-        console.error(report.errors[0].type) // todo pretty print
+        console.error(report.errors[0].type + ":")
+        console.error(report.errors[0].prettyPrint())
     } else {
         console.error(report);
     }
