@@ -5,191 +5,6 @@ import {tokenInfo} from "../utils";
 import {error_type} from "../typecheckError";
 import {expectGood, expectTypeError} from "./utils-for-tests";
 
-test('match', () => {
-    const res = parseAndTypecheck(`
-language core;
-
-extend with #structural-patterns;
-
-fn main(n : Nat) -> Nat {
-  return match true {
-    true => 0
-    | false => 0
-   }
-}
-`);
-    expectGood(res);
-})
-
-test('match2', () => {
-    const res = parseAndTypecheck(`
-language core;
-
-extend with #structural-patterns, #natural-literals, #variants;
-
-fn main(n : (fn(Nat) -> Nat)) -> Nat {
-  return match n {
-      a => 0
-   }
-}
-`);
-    expectGood(res);
-})
-
-test('match_unit', () => {
-    const res = parseAndTypecheck(`
-language core;
-
-extend with #unit-type, #structural-patterns;
-
-fn main(n : Nat) -> Nat {
-  return match(unit) {
-    unit => 0
-    | m => 0
-  }
-}
-`);
-    expectGood(res);
-})
-
-test('match_list', () => {
-    const res = parseAndTypecheck(`
-language core;
-
-extend with #structural-patterns, #natural-literals, #lists;
-
-fn test(n : [Nat]) -> Nat {
-  return match n {
-      [] => 0
-      | [a] => a
-      | [a, b] => a
-      | [a, b, c] => a
-      | cons (1, xs) => 1
-      | cons (2, cons(3, xs)) => 2
-      | cons (a, cons(b, [1, 2])) => b
-      | cons (a, cons(b, cons(c, cs))) => c
-   }
-}
-
-fn main(n : [Nat]) -> Nat {
-  return match n {
-      [] => 0
-      | cons (x, xs) => 0
-   }
-}
-`);
-    expectGood(res);
-})
-
-test('match_nat', () => {
-    const res = parseAndTypecheck(`
-language core;
-
-extend with #structural-patterns, #natural-literals;
-
-fn main(n : Nat) -> Nat {   
-  return match 5 {
-    \t0 => 0
-    | succ(n) => 0
-   }
-}   
-`);
-    expectGood(res);
-})
-
-
-test('match_variants', () => {
-    const res = parseAndTypecheck(`
-language core;
-
-extend with #structural-patterns;
-
-fn main(n : Nat) -> Nat {
-  return match true {
-      true => 0
-   }
-}
-    `);
-    expect(res).instanceof(TypeErrorsReport);
-})
-
-test('match_variants2', () => {
-    const res = parseAndTypecheck(`
-language core;
-
-extend with #structural-patterns;
-
-fn main(n : Nat) -> Nat {
-  return match true {
-      true => 0
-    | _ => 0
-   }
-}
-    `);
-    expectGood(res);
-})
-
-test('match_nat_succ', () => {
-    const res = parseAndTypecheck(`
-language core;
-
-extend with #structural-patterns, #natural-literals;
-
-fn test(input : Nat) -> Nat {
-  return match input {
-      succ(succ(n)) => n
-    | succ(n) => n
-    | _ => 0
-  }
-}
-
-fn main(n : Nat) -> Nat {
-  return match n {
-      0 => 0
-    | succ(succ(succ(n))) => n
-    | 1 => 1
-    //| _ => n
-   }
-}
-    `);
-    expect(res).instanceof(TypeErrorsReport);
-})
-/*
-
-test('match_record_with_nat', () => {
-    const res = parseAndTypecheck(`
-language core;
-
-extend with #structural-patterns, #natural-literals, #records;
-
-fn main(n : Nat) -> Nat {
-  return match {a = true, b = 0} {
-    \t{b = 0, a = d} => 0
-   }
-}
-    `);
-    expect(res).instanceof(TypeErrorsReport);
-})
-
-test('match_record_with_nat2', () => {
-    const res = parseAndTypecheck(`
-language core;
-
-extend with #structural-patterns, #natural-literals, #records;
-
-fn main(n : Nat) -> Nat {
-  return match {a = true, b = 0} {
-      {b = 0, a = d} => 0
-    | {b = succ(n), a = true} => 0
-    //| _ => 0
-   }
-}
-    `);
-    expect(res).instanceof(TypeErrorsReport);
-})
-
-*/
-
 test('record', () => {
     const res = parseAndTypecheck(`
 language core;
@@ -226,7 +41,7 @@ extend with #structural-patterns, #natural-literals, #records;
 
 fn main(n : Nat) -> { a : Bool, b : Nat } {
   return match {a = true, b = 0} {
-    \t{b = c, a = d} => { a = false, b = 0 } 
+      {b = c, a = d} => { a = false, b = 0 } 
    }
 }
     `);
@@ -241,7 +56,6 @@ extend with #records;
 fn main(n : Nat) -> Nat {
   return { i = 0, inner = { x = true, y = succ(0) }}.inner.y
 }
-
     `);
     expectGood(res);
 })

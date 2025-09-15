@@ -75,6 +75,30 @@ fn main(n : Nat) -> Nat {
     expectGood(res);
 })
 
+test('memory5', () => {
+    const res = parseAndTypecheck(`
+language core;
+extend with #multiparameter-functions, #unit-type, #references, #let-bindings, #sequencing;
+
+
+fn inc_ref(ref : &Nat, a : Nat) -> Unit {
+  return ref := succ (*ref)
+}
+
+fn inc3(ref : &Nat) -> Nat {
+  return inc_ref(ref, 0);
+  inc_ref(ref, 0);
+  inc_ref(ref, 0);
+  *ref
+}
+
+fn main(n : Nat) -> Nat {
+  return let ref = new(n) in inc3(ref)
+}
+`);
+    expectGood(res);
+})
+
 test('memory_ref_ref', () => {
     const res = parseAndTypecheck(`
 language core;

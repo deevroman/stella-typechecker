@@ -138,6 +138,7 @@ import {
     StellaVariant
 } from "./typecheckTypes";
 import {addFunctionsToScope, findAllFunctions, makeFunctionsMap} from "./typechecker";
+import {checkNoexhaustiveMatch} from "./noexhaustive-match-utils";
 
 export class stellaParserVisitorImpl implements stellaParserVisitor<void> {
     scopes: { [p: string]: StellaType | undefined }[] = [{}];
@@ -149,6 +150,8 @@ export class stellaParserVisitorImpl implements stellaParserVisitor<void> {
     subtypingEnabled: boolean = false;
     exceptionType: StellaType | undefined;
     ambiguousTypeAsBottom: boolean = false;
+    maxIntInProgram: number = 0;
+    maxListLenInProgram: number = 0;
 
     constructor(extensions: string[] = []) {
         this.extensions = extensions;
@@ -433,7 +436,9 @@ export class stellaParserVisitorImpl implements stellaParserVisitor<void> {
     }
 
     visitConstInt(ctx: ConstIntContext): StellaType {
-        const returnType = new StellaType("NAT_TYPE").addValue(ctx._n.text!, true)
+        const value = ctx._n.text!
+        this.maxIntInProgram = Math.max(this.maxIntInProgram, parseInt(value))
+        const returnType = new StellaType("NAT_TYPE").addValue(value, true)
         const contextType = this.getContextType()
         if (contextType) {
             returnType.tryAssignTo(contextType, this)
@@ -795,7 +800,7 @@ export class stellaParserVisitorImpl implements stellaParserVisitor<void> {
                 this.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_PATTERN_FOR_TYPE))
             }
             this.dropPatternType()
-            return new StellaRecord([]); // todo
+            return new StellaEntityRecord(ctx._label.text!, type);
         } else {
             this.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_PATTERN_FOR_TYPE))
         }
@@ -867,6 +872,7 @@ export class stellaParserVisitorImpl implements stellaParserVisitor<void> {
 
     visitList(ctx: ListContext): StellaType | undefined {
         const elemsCount = ctx.expr().length
+        this.maxListLenInProgram = Math.max(this.maxListLenInProgram, elemsCount)
         const contextType = this.getContextType()
         if (contextType) {
             if (contextType instanceof StellaList) {
@@ -939,9 +945,8 @@ export class stellaParserVisitorImpl implements stellaParserVisitor<void> {
         for (const _case of ctx._cases) {
             this.openScope()
             this.addPatternType(matchType!);
-            const casePatternType = _case._pattern_.accept(this)!
+            const casePatternType = _case._pattern_.accept(this)! as StellaType | undefined
             if (casePatternType === undefined) {
-                debugger
                 this.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_PATTERN_FOR_TYPE))
                 return
             }
@@ -962,68 +967,74 @@ export class stellaParserVisitorImpl implements stellaParserVisitor<void> {
                 } else {
                     returnTypes.push(value)
                 }
+            } else {
+                debugger
             }
             this.dropPatternType()
             this.closeScope()
         }
         switch (matchType?.type) {
-            case "BOOL_TYPE": {
-                if (matchedTypeVariants.find(t => t.value === "_")) {
-                    return returnTypes[0]
-                }
-                if (!matchedTypeVariants.some(t => t.value === "true")) {
-                    this.addError(new TypecheckError(error_type.ERROR_NONEXHAUSTIVE_MATCH_PATTERNS)) // todo
-                }
-                if (!matchedTypeVariants.some(t => t.value === "false")) {
-                    this.addError(new TypecheckError(error_type.ERROR_NONEXHAUSTIVE_MATCH_PATTERNS)) // todo
-                }
-                return returnTypes[0]
-            }
-            case "NAT_TYPE": {
-                if (matchedTypeVariants.length === 0) {
-                    this.addError(new TypecheckError(error_type.ERROR_NONEXHAUSTIVE_MATCH_PATTERNS)) // todo
-                    break
-                }
-                if (matchedTypeVariants.find(t => t.value === "_")) {
-                    return returnTypes[0]
-                }
-                matchedTypeVariants.sort((a, b) => {
-                    if (parseInt(a.value!) < parseInt(b.value!)) {
-                        return 1;
-                    }
-                    if (parseInt(a.value!) > parseInt(b.value!)) {
-                        return -1
-                    }
-                    return 0
-                })
-                let maxChecked = matchedTypeVariants[0];
-                if (maxChecked.isEqualValue) {
-                    this.addError(new TypecheckError(error_type.ERROR_NONEXHAUSTIVE_MATCH_PATTERNS)) // todo
-                    break
-                }
-                for (const i of matchedTypeVariants) {
-                    if (!i.isEqualValue) {
-                        maxChecked = i
-                    } else {
-                        if (parseInt(i.value!) + 1 >= parseInt(maxChecked.value!)) {
-                            maxChecked = i
-                        } else {
-                            this.addError(new TypecheckError(error_type.ERROR_NONEXHAUSTIVE_MATCH_PATTERNS)) // todo
-                            return returnTypes[0]
-                        }
-                    }
-                }
-                if (parseInt(maxChecked.value!) !== 0) {
-                    this.addError(new TypecheckError(error_type.ERROR_NONEXHAUSTIVE_MATCH_PATTERNS)) // todo
-                    break
-                }
-                return returnTypes[0]
-            }
+            // case "BOOL_TYPE": {
+            //     if (matchedTypeVariants.find(t => t.value === "_")) {
+            //         return returnTypes[0]
+            //     }
+            //     if (!matchedTypeVariants.some(t => t.value === "true")) {
+            //         this.addError(new TypecheckError(error_type.ERROR_NONEXHAUSTIVE_MATCH_PATTERNS)) // todo
+            //         return undefined
+            //     }
+            //     if (!matchedTypeVariants.some(t => t.value === "false")) {
+            //         this.addError(new TypecheckError(error_type.ERROR_NONEXHAUSTIVE_MATCH_PATTERNS)) // todo
+            //         return undefined
+            //     }
+            //     return returnTypes[0]
+            // }
+            // case "NAT_TYPE": {
+            //     if (matchedTypeVariants.length === 0) {
+            //         this.addError(new TypecheckError(error_type.ERROR_NONEXHAUSTIVE_MATCH_PATTERNS)) // todo
+            //         return undefined
+            //     }
+            //     if (matchedTypeVariants.find(t => t.value === "_")) {
+            //         return returnTypes[0]
+            //     }
+            //     matchedTypeVariants.sort((a, b) => {
+            //         if (parseInt(a.value!) < parseInt(b.value!)) {
+            //             return 1;
+            //         }
+            //         if (parseInt(a.value!) > parseInt(b.value!)) {
+            //             return -1
+            //         }
+            //         return 0
+            //     })
+            //     let maxChecked = matchedTypeVariants[0];
+            //     if (maxChecked.isEqualValue) {
+            //         this.addError(new TypecheckError(error_type.ERROR_NONEXHAUSTIVE_MATCH_PATTERNS)) // todo
+            //         return undefined
+            //     }
+            //     for (const i of matchedTypeVariants) {
+            //         if (!i.isEqualValue) {
+            //             maxChecked = i
+            //         } else {
+            //             if (parseInt(i.value!) + 1 >= parseInt(maxChecked.value!)) {
+            //                 maxChecked = i
+            //             } else {
+            //                 this.addError(new TypecheckError(error_type.ERROR_NONEXHAUSTIVE_MATCH_PATTERNS)) // todo
+            //                 return returnTypes[0]
+            //             }
+            //         }
+            //     }
+            //     if (parseInt(maxChecked.value!) !== 0) {
+            //         this.addError(new TypecheckError(error_type.ERROR_NONEXHAUSTIVE_MATCH_PATTERNS)) // todo
+            //         return undefined
+            //     }
+            //     return returnTypes[0]
+            // }
             default:
+                checkNoexhaustiveMatch(matchType, matchedTypeVariants, this)
                 return returnTypes[0]
         }
-        throw "Unsupported"
+        throw "Never shoud throw"
     }
+
 
     visitMatchCase(ctx: MatchCaseContext): void {
         debugger;
@@ -1144,18 +1155,39 @@ export class stellaParserVisitorImpl implements stellaParserVisitor<void> {
     }
 
     visitPatternCons(ctx: PatternConsContext): StellaType | undefined {
-        if (this.getPatternType()?.type !== "LIST_TYPE") {
+        const patternType = this.getPatternType()
+        if (!(patternType instanceof StellaList)) {
             this.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_PATTERN_FOR_TYPE))
+            return
         }
 
-        this.addPatternType((this.getPatternType() as StellaList).parameterType!)
-        ctx._head.accept(this)
+        this.addPatternType(patternType.parameterType!)
+        const headType = ctx._head.accept(this) as StellaType | undefined
         this.dropPatternType()
+        if (headType === undefined) {
+            return undefined
+        }
 
         this.addPatternType(this.getPatternType()!)
-        ctx._tail.accept(this)
+        const tailType = ctx._tail.accept(this) as StellaList | undefined
         this.dropPatternType()
-        return StellaList.makeEmptyList(this.ambiguousTypeAsBottom); // todo
+        if (tailType === undefined) {
+            return undefined
+        }
+        // return StellaList.makeEmptyList(this.ambiguousTypeAsBottom).setMinLength(newMinLen); // todo
+        if (tailType.isFixedLength()) {
+            const newLen = tailType.fixedLength + 1
+            this.maxListLenInProgram = Math.max(this.maxListLenInProgram, newLen)
+            return new StellaList(patternType.parameterType)
+                .setFixedLength(newLen)
+                .setFixedElems([headType, ...tailType.fixedElems]) // todo clean param
+        } else {
+            const newMinLen = tailType.minLength + 1
+            this.maxListLenInProgram = Math.max(this.maxListLenInProgram, newMinLen)
+            return new StellaList(patternType.parameterType)
+                .setMinLength(newMinLen)
+                .setFixedElems([headType, ...tailType.fixedElems]) // todo clean param
+        }
     }
 
     visitPatternFalse(ctx: PatternFalseContext): StellaType {
@@ -1165,12 +1197,16 @@ export class stellaParserVisitorImpl implements stellaParserVisitor<void> {
         return new StellaType("BOOL_TYPE").addValue("false", true); // todo
     }
 
-    visitPatternInl(ctx: PatternInlContext): void {
+    visitPatternInl(ctx: PatternInlContext): StellaType | undefined {
         const patternType = this.getPatternType()
         if (patternType instanceof StellaSumType) {
             this.addPatternType(patternType.leftType!)
             try {
-                return ctx._pattern_.accept(this)
+                const type = ctx._pattern_.accept(this) as StellaType | undefined
+                if (type === undefined) {
+                    return;
+                }
+                return new StellaSumType(type, new StellaType("_INCOMPLETED_SUM_TYPE_FILLER"))
             } finally {
                 this.dropPatternType()
             }
@@ -1180,12 +1216,16 @@ export class stellaParserVisitorImpl implements stellaParserVisitor<void> {
         return undefined;
     }
 
-    visitPatternInr(ctx: PatternInrContext): void {
+    visitPatternInr(ctx: PatternInrContext): StellaType | undefined {
         const patternType = this.getPatternType()
         if (patternType instanceof StellaSumType) {
             this.addPatternType(patternType.rightType!)
             try {
-                return ctx._pattern_.accept(this)
+                const type = ctx._pattern_.accept(this) as StellaType | undefined
+                if (type === undefined) {
+                    return;
+                }
+                return new StellaSumType(new StellaType("_INCOMPLETED_SUM_TYPE_FILLER"), type)
             } finally {
                 this.dropPatternType()
             }
@@ -1203,32 +1243,49 @@ export class stellaParserVisitorImpl implements stellaParserVisitor<void> {
         }
     }
 
-    visitPatternList(ctx: PatternListContext): StellaType {
-        if (!(this.getPatternType() instanceof StellaList)) {
+    visitPatternList(ctx: PatternListContext): StellaType | undefined {
+        const patternType = this.getPatternType()
+        if (!(patternType instanceof StellaList)) {
             this.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_PATTERN_FOR_TYPE))
+            return
         }
-        this.addPatternType((this.getPatternType() as StellaList).parameterType!)
-        ctx._patterns.forEach(p => p.accept(this))
+        this.addPatternType(patternType.parameterType!)
+        const elemsTypes = []
+        for (const p of ctx._patterns) {
+            const type = p.accept(this) as StellaType | undefined;
+            if (type === undefined) {
+                return undefined
+            }
+            elemsTypes.push(type)
+        }
         this.dropPatternType()
-        return StellaList.makeEmptyList(this.ambiguousTypeAsBottom); // todo
+        // return StellaList.makeEmptyList(this.ambiguousTypeAsBottom); // todo
+        return new StellaList(patternType.parameterType).setFixedLength(ctx._patterns.length).setFixedElems(elemsTypes)
     }
 
     visitPatternRecord(ctx: PatternRecordContext): StellaType | undefined {
+        const fields = []
         for (const p of ctx._patterns) {
-            const fieldType = p.accept(this);
+            const fieldType = p.accept(this) as StellaEntityRecord | undefined;
             if (fieldType === undefined) {
                 return
             }
+            fields.push(fieldType)
         }
-        return new StellaRecord([]); // todo
+        return new StellaRecord(fields);
     }
 
-    visitPatternSucc(ctx: PatternSuccContext): StellaType {
+    visitPatternSucc(ctx: PatternSuccContext): StellaType | undefined {
         this.addPatternType(this.getPatternType())
-        const valueType = ctx._pattern_.accept(this)! as StellaType
+        const valueType = ctx._pattern_.accept(this)! as StellaType | undefined
+        if (valueType === undefined) {
+            return undefined
+        }
         if (valueType.type === "ANY_TYPE") {
             return new StellaType("NAT_TYPE").addValue("1", false)
         } else if (valueType.type === "NAT_TYPE") {
+            const succValue = parseInt(valueType.value ?? "0") + 1
+            this.maxIntInProgram = Math.max(this.maxIntInProgram, succValue)
             return new StellaType("NAT_TYPE").addValue((parseInt(valueType.value ?? "0") + 1).toString(), valueType.isEqualValue)
         } else {
             this.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_PATTERN_FOR_TYPE))
@@ -1237,14 +1294,15 @@ export class stellaParserVisitorImpl implements stellaParserVisitor<void> {
         return new StellaType("NAT_TYPE") // todo
     }
 
-    visitPatternTrue(ctx: PatternTrueContext): StellaType {
+    visitPatternTrue(ctx: PatternTrueContext): StellaType | undefined {
         if (this.getPatternType()?.type !== "BOOL_TYPE") {
             this.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_PATTERN_FOR_TYPE))
+            return
         }
-        return new StellaType("BOOL_TYPE").addValue("true", true); // todo
+        return new StellaType("BOOL_TYPE").addValue("true", true);
     }
 
-    visitPatternTuple(ctx: PatternTupleContext): void {
+    visitPatternTuple(ctx: PatternTupleContext): StellaType | undefined {
         const patternType = this.getPatternType()
         if (!(patternType instanceof StellaTuple)) {
             this.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_PATTERN_FOR_TYPE))
@@ -1254,8 +1312,18 @@ export class stellaParserVisitorImpl implements stellaParserVisitor<void> {
             this.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_PATTERN_FOR_TYPE))
             return undefined
         }
-        ctx._patterns.forEach(p => p.accept(this))
-        return undefined;
+        const elems = []
+        for (let i = 0; i < ctx._patterns.length; i++) {
+            const p = ctx._patterns[i];
+            this.addPatternType(patternType.elems[i])
+            const elemType = p.accept(this) as StellaType | undefined
+            this.dropPatternType()
+            if (elemType === undefined) {
+                return undefined
+            }
+            elems.push(elemType)
+        }
+        return new StellaTuple(elems)
     }
 
     visitPatternUnit(ctx: PatternUnitContext): StellaType | undefined {
@@ -1263,19 +1331,26 @@ export class stellaParserVisitorImpl implements stellaParserVisitor<void> {
         if (patternType.type !== "UNIT_TYPE") {
             this.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_PATTERN_FOR_TYPE))
         } else {
-            return new StellaType("UNIT_TYPE");
+            return new StellaType("UNIT_TYPE").addValue("unit", true);
         }
     }
 
-    visitPatternVar(ctx: PatternVarContext): StellaType {
+    visitPatternVar(ctx: PatternVarContext): StellaType | undefined {
         const varName = ctx._name.text!
         if (varName === "_") {
-            return new StellaType("ANY_TYPE").addValue("_", false)
+            return new StellaType("ANY_TYPE").addVarName(varName).addValue(varName, false)
         } else {
-            const parentType = this.getPatternType()!
+            const parentType = this.getPatternType()!.clone()
+            if (this.getScope()[varName]) {
+                this.addError(new TypecheckError(error_type.ERROR_DUPLICATE_PATTERN_VARIABLE))
+                return undefined
+            }
             this.addToScope(varName, parentType!)
+            parentType.addVarName(varName)
             if (parentType.type === "NAT_TYPE") {
                 return parentType.addValue("0", false)
+            } else if (parentType instanceof StellaList) {
+                return parentType.setMinLength(0)
             }
             return parentType
         }
@@ -1295,15 +1370,19 @@ export class stellaParserVisitorImpl implements stellaParserVisitor<void> {
                     return
                 }
                 this.addPatternType(patternValueTypeFromContext)
-                ctx._pattern_.accept(this)
+                const type = ctx._pattern_.accept(this) as StellaType | undefined
+                if (type === undefined) {
+                    return undefined
+                }
                 this.dropPatternType()
+                return new StellaVariant([new StellaEntityVariant(ctx._label.text!, type)]).addValue(ctx._label.text!, true)
             } else {
                 if (patternValueTypeFromContext.type !== "_NULLARY_VARIANT_ENTITY_TYPE") {
                     this.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_NULLARY_VARIANT_PATTERN))
                     return
                 }
             }
-            return new StellaVariant([]); // todo
+            return new StellaVariant([new StellaEntityVariant(ctx._label.text!, new StellaType("_NULLARY_VARIANT_ENTITY_TYPE"))]);
         } else {
             this.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_PATTERN_FOR_TYPE))
         }
@@ -1531,15 +1610,21 @@ export class stellaParserVisitorImpl implements stellaParserVisitor<void> {
         return tryExprType;
     }
 
-    visitTuple(ctx: TupleContext): StellaType {
-        return new StellaTuple(ctx._exprs.map(t => {
+    visitTuple(ctx: TupleContext): StellaType | undefined {
+        const elems = [];
+        for (const t of ctx._exprs) {
             this.addContextType(undefined) // fixme ?
             try {
-                return t.accept(this)!
+                const elem = t.accept(this) as StellaType | undefined
+                if (elem === undefined) {
+                    return undefined
+                }
+                elems.push(elem);
             } finally {
                 this.dropContextType()
             }
-        }));
+        }
+        return new StellaTuple(elems);
     }
 
     visitTypeAbstraction(ctx: TypeAbstractionContext): StellaType | undefined {
@@ -1717,8 +1802,8 @@ export class stellaParserVisitorImpl implements stellaParserVisitor<void> {
         return new StellaType("UNIT_TYPE")
     }
 
-    visitTypeVar(ctx: TypeVarContext): StellaType |undefined {
-        if (this.typeVarNameInScope(ctx._name.text!)){
+    visitTypeVar(ctx: TypeVarContext): StellaType | undefined {
+        if (this.typeVarNameInScope(ctx._name.text!)) {
             return new StellaGenericVarType(ctx._name.text!);
         } else {
             this.addError(new TypecheckError(error_type.ERROR_UNDEFINED_TYPE_VARIABLE))

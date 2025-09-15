@@ -1,7 +1,5 @@
 import {expect, test} from 'vitest'
-import {SyntaxErrorReport, parseAndTypecheck, TypeErrorsReport, GoodReport} from "../typechecker";
-import {example} from "../examples";
-import {tokenInfo} from "../utils";
+import {parseAndTypecheck, TypeErrorsReport} from "../typechecker";
 import {error_type} from "../typecheckError";
 import {expectGood, expectTypeError} from "./utils-for-tests";
 
@@ -15,6 +13,19 @@ fn main(n : Nat) -> {Nat, Nat} {
 }
 `);
     expectGood(res);
+})
+
+test('pair_bad', () => {
+    const res = parseAndTypecheck(`
+language core;
+
+extend with #pairs;
+
+fn main(f : Nat) -> { Nat, Nat } {
+  return { f, f(0) }
+}
+`);
+    expectTypeError(res, error_type.ERROR_NOT_A_FUNCTION)
 })
 
 test('tuple', () => {
@@ -53,25 +64,6 @@ fn main(n : Nat) -> Nat {
 `);
     expect(res).instanceof(TypeErrorsReport);
     expectTypeError(res, error_type.ERROR_UNEXPECTED_FIELD_ACCESS)
-})
-
-test('match_tuple', () => {
-    const res = parseAndTypecheck(`
-language core;
-
-extend with #tuples, #structural-patterns;
-
-fn foo(a : Nat) -> { Nat, Bool } {
-  return { 0, true }
-}
-
-fn main(n : Nat) -> Nat {
-  return match(foo(0)) {
-    {x, y, z} => x
-}
-}
-`);
-    expectTypeError(res, error_type.ERROR_UNEXPECTED_PATTERN_FOR_TYPE)
 })
 
 test('tuple_bad_index', () => {

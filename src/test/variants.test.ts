@@ -11,6 +11,19 @@ language core;
 
 extend with #structural-patterns, #natural-literals, #variants;
 
+fn main(n : Nat) -> <| a : Nat, b : Bool |> {
+  return <| a = 0 |>;
+}
+`);
+    expectGood(res);
+})
+
+test('variant2', () => {
+    const res = parseAndTypecheck(`
+language core;
+
+extend with #structural-patterns, #natural-literals, #variants;
+
 fn main(n : <| a : Nat, b : Bool |>) -> Nat {
   return match n {
       <| a = t |> => t
@@ -21,7 +34,7 @@ fn main(n : <| a : Nat, b : Bool |>) -> Nat {
     expectGood(res);
 })
 
-test('variant2', () => {
+test('variant3', () => {
     const res = parseAndTypecheck(`language core;
 
 extend with #variants, #unit-type;
@@ -42,7 +55,7 @@ fn main(succeed : Bool) -> Nat {
     expectGood(res);
 })
 
-test('variant3', () => {
+test('variant4', () => {
     const res = parseAndTypecheck(`
 language core;
 
@@ -85,7 +98,7 @@ fn main(n : Nat) -> Nat {
   return match(foo(0)) {
     <| a = x |> => x
     | <| b |> => 0
-\t}
+  }
 }
 
 `);

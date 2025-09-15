@@ -8,10 +8,10 @@ export function expectTypeError(res: SyntaxErrorReport | TypeErrorsReport | Good
 }
 
 export function expectGood(res: SyntaxErrorReport | TypeErrorsReport | GoodReport) {
+    console.log(res.sourceText)
     try {
         expect(res).instanceof(GoodReport);
     } catch (e) {
-        console.log(res.sourceText)
         if (res instanceof TypeErrorsReport) {
             res.errors.forEach(err => {
                 console.error(err.type)

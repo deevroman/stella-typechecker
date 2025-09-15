@@ -5,12 +5,12 @@ type StellaTypeEnum =
     "UNIT_TYPE" |
     "BOOL_TYPE" |
     "NAT_TYPE" |
-    "PAIR_TYPE" |
     "RECORD_TYPE" |
     "_RECORD_ENTITY_TYPE" |
     "_VARIANT_ENTITY_TYPE" |
     "_NULLARY_VARIANT_ENTITY_TYPE" |
     "SUM_TYPE" |
+    "_INCOMPLETED_SUM_TYPE_FILLER" |
     "TUPLE_TYPE" |
     "LIST_TYPE" |
     "_EMPTY_LIST_TYPE" |
@@ -24,12 +24,15 @@ type StellaTypeEnum =
     "AUTO_TYPE" |
     "GENERIC_TYPE";
 
+// const simpleTypes: StellaTypeEnum[] = ["BOOL_TYPE", "NAT_TYPE", "UNIT_TYPE"]
+
 export class StellaType {
     readonly type: StellaTypeEnum = "UNIT_TYPE";
     value: string | undefined = undefined;
     isEqualValue: boolean = true;
     addr: string = ""; // todo cleanup
     genericsList: StellaGenericVarType[] = [];
+    varName = "";
 
     constructor(type: StellaTypeEnum = "UNIT_TYPE") {
         this.type = type;
@@ -51,9 +54,28 @@ export class StellaType {
         return this
     }
 
+    addVarName(name: string) {
+        this.varName = name
+        return this
+    }
+
+    isJokerType() {
+        return this.varName !== ""
+    }
+
     isGeneric() {
         return this.genericsList.length !== 0
     }
+
+    clone() : this {
+        const copy = Object.create(Object.getPrototypeOf(this))
+        Object.assign(copy, this)
+        return copy
+    }
+    //
+    // isSimpleType() {
+    //     return simpleTypes.includes(this.type)
+    // }
 
     isEqualType(oth: StellaType | undefined) {
         return this.type === oth?.type
@@ -218,6 +240,11 @@ export class StellaFunction extends StellaType {
 export class StellaList extends StellaType {
     readonly type: StellaTypeEnum = "LIST_TYPE";
     parameterType: StellaType;
+    isInfiniteList: boolean = false;
+    minLength: number = 0;
+    isFixedList: boolean = false;
+    fixedLength: number = 0;
+    fixedElems: StellaType[] = []
 
     constructor(parameterType: StellaType = new StellaType("_EMPTY_LIST_TYPE")) {
         super();
@@ -225,11 +252,32 @@ export class StellaList extends StellaType {
     }
 
     static makeEmptyList(ambiguousTypeAsBottom: boolean) {
-        return new StellaList(ambiguousTypeAsBottom ? new StellaBot() : new StellaType("_EMPTY_LIST_TYPE"))
+        return new StellaList(ambiguousTypeAsBottom ? new StellaBot() : new StellaType("_EMPTY_LIST_TYPE")).setMinLength(0)
     }
 
     isEmptyList() {
         return this.parameterType.type === "_EMPTY_LIST_TYPE"
+    }
+
+    setMinLength(len: number) : this {
+        this.isInfiniteList = true
+        this.minLength = len
+        return this
+    }
+
+    setFixedLength(len: number) : this {
+        this.isFixedList = true
+        this.fixedLength = len
+        return this
+    }
+
+    isFixedLength() : boolean {
+        return this.isFixedList
+    }
+
+    setFixedElems(elems: StellaType[]) : this {
+        this.fixedElems = elems
+        return this
     }
 
     isEqualType(oth: StellaType | undefined): boolean {
@@ -312,6 +360,8 @@ export class StellaSumType extends StellaType {
     readonly type: StellaTypeEnum = "SUM_TYPE";
     leftType: StellaType | undefined;
     rightType: StellaType | undefined;
+    leftHidden: boolean = false
+    rightHidden: boolean = false
 
     constructor(leftType: StellaType, rightType: StellaType) {
         super();
@@ -319,6 +369,20 @@ export class StellaSumType extends StellaType {
         this.rightType = rightType;
     }
 
+    hideLeftValue() {
+        this.leftHidden = true
+        return this
+    }
+
+    unhideLeftValue() {
+        this.leftHidden = false
+        return this
+    }
+
+    hideRightValue() {
+        this.rightHidden = true
+        return this
+    }
 
     isEqualType(oth: StellaType | undefined): boolean {
         return super.isEqualType(oth)
@@ -575,6 +639,7 @@ export class StellaEntityVariant extends StellaType {
 export class StellaVariant extends StellaType {
     readonly type: StellaTypeEnum = "VARIANT_TYPE";
     entities: [string, StellaType][] = []
+
 
     private readonly entitiesIndex: { [label: string]: StellaType } = {}
 

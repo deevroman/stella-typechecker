@@ -1,10 +1,28 @@
 import {example} from "./examples";
 import {SyntaxErrorReport, parseAndTypecheck} from "./typechecker";
+import { autocompletion, CompletionContext } from "@codemirror/autocomplete";
 import { EditorState } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import { basicSetup } from "codemirror";
-import {Token} from "antlr4ts/Token";
 import {tokenInfo} from "./utils";
+
+
+const stellaKeywords = [
+    "language", "core", "extend", "with",
+    "fn", "return", "if", "then", "else",
+    "let", "in", "as", "cast", "throw", "try", "catch",
+    "panic!", "Top", "Bot", "Nat", "Bool", "Unit"
+];
+
+function stellaCompletion(context: CompletionContext) {
+    let word = context.matchBefore(/\w*/);
+    if (!word || (word.from == word.to && !context.explicit)) return null;
+    return {
+        from: word.from,
+        options: stellaKeywords.map(kw => ({ label: kw, type: "keyword" }))
+    };
+}
+
 
 if (typeof window !== undefined) {
     const myTheme = EditorView.theme({
@@ -54,7 +72,7 @@ if (typeof window !== undefined) {
     const editor = new EditorView({
         state: EditorState.create({
             doc: example,
-            extensions: [basicSetup, myTheme, onUpdate]
+            extensions: [basicSetup, myTheme, onUpdate, /*autocompletion({ override: [stellaCompletion] })*/],
         }),
         parent: document.getElementById("code")!
     });
