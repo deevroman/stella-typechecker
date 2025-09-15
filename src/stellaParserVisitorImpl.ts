@@ -244,6 +244,9 @@ export class stellaParserVisitorImpl implements stellaParserVisitor<void> {
     }
 
     addError(err: TypecheckError) {
+        if (this.subtypingEnabled && err.type === error_type.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION) {
+            err.type = error_type.ERROR_UNEXPECTED_SUBTYPE
+        }
         this.type_errors.push(err)
     }
 
