@@ -372,7 +372,6 @@ fn main(n : Nat) -> Nat {
     `);
     expectTypeError(res, error_type.ERROR_NONEXHAUSTIVE_MATCH_PATTERNS)
 })
-/*
 
 test('match_record_with_nat', () => {
     const res = parseAndTypecheck(`
@@ -382,14 +381,63 @@ extend with #structural-patterns, #natural-literals, #records;
 
 fn main(n : Nat) -> Nat {
   return match {a = true, b = 0} {
-    \t{b = 0, a = d} => 0
+      {b = x, a = d} => 0
    }
 }
     `);
-    expect(res).instanceof(TypeErrorsReport);
+    expectGood(res)
 })
 
 test('match_record_with_nat2', () => {
+    const res = parseAndTypecheck(`
+language core;
+
+extend with #structural-patterns, #natural-literals, #records;
+
+fn main(n : Nat) -> Nat {
+  return match {a = true, b = 0} {
+      {b = 0, a = d} => 0
+    | {b = succ(n), a = true} => 0
+    | {b = succ(n), a = false} => 0
+    //| _ => 0
+   }
+}
+    `);
+    expectGood(res)
+})
+
+test('match_record_with_dup_fields', () => {
+    const res = parseAndTypecheck(`
+language core;
+
+extend with #structural-patterns, #natural-literals, #records;
+
+fn main(n : Nat) -> Nat {
+  return match {a = true, b = 0} {
+      {b = x, a = d, a = y} => 0
+   }
+}
+    `);
+    expectTypeError(res, error_type.ERROR_DUPLICATE_RECORD_PATTERN_FIELDS)
+})
+
+test('match_ne_record_with_nat', () => {
+    const res = parseAndTypecheck(`
+language core;
+
+extend with #structural-patterns, #natural-literals, #records;
+
+fn main(n : Nat) -> Nat {
+  return match {a = true, b = 0} {
+      {b = 0, a = d} => 0
+   }
+}
+    `);
+    expectTypeError(res, error_type.ERROR_NONEXHAUSTIVE_MATCH_PATTERNS)
+})
+
+
+test('match_ne_record_with_nat2', () => {
     const res = parseAndTypecheck(`
 language core;
 
@@ -403,10 +451,9 @@ fn main(n : Nat) -> Nat {
    }
 }
     `);
-    expect(res).instanceof(TypeErrorsReport);
+    expectTypeError(res, error_type.ERROR_NONEXHAUSTIVE_MATCH_PATTERNS)
 })
 
-*/
 
 test('match_tuple', () => {
     const res = parseAndTypecheck(`
@@ -597,12 +644,80 @@ fn main(n : Bool + Nat) -> Nat {
 })
 
 
-/*
+test('match_ne_tuple_and_lists', () => {
+    const res = parseAndTypecheck(`
 language core;
 
-extend with #multiparameter-functions, #sum-types, #structural-patterns, #natural-literals, #records, #tuples, #lists;
+extend with #multiparameter-functions, #sum-types, #structural-patterns, #tuples, #lists;
 
-fn kek(n : {Bool, Nat, {Bool + (Bool + Nat)}}) -> Nat {
+fn main(n : Nat) -> Nat {
+  return match {{0}, true, [0]} {
+    	{{0}, x, []} => 0
+    // | {{0}, x, cons(0, s)} => 0
+    // | {{0}, x, cons(0, cons(0, ss))} => 0
+    // | {{0}, x, cons(succ(q), sss)} => 0
+    // | {{succ(succ(n))}, x, l} => 0
+    // | {{1}, false, l} => 0
+    //| {{x}, true, l} => 0
+    //| _ => 0
+   }
+}
+`)
+    expectTypeError(res, error_type.ERROR_NONEXHAUSTIVE_MATCH_PATTERNS)
+})
+
+test('match_ne_tuple_and_lists2', () => {
+    const res = parseAndTypecheck(`
+language core;
+
+extend with #multiparameter-functions, #sum-types, #structural-patterns, #tuples, #lists;
+
+fn main(n : Nat) -> Nat {
+  return match {{0}, true, [0]} {
+    	{{0}, x, []} => 0
+    | {{0}, x, cons(0, s)} => 0
+    | {{0}, x, cons(0, cons(0, ss))} => 0
+    | {{0}, x, cons(succ(q), sss)} => 0
+    // | {{succ(succ(n))}, x, l} => 0
+    // | {{1}, false, l} => 0
+    //| {{x}, true, l} => 0
+    //| _ => 0
+   }
+}
+`)
+    expectTypeError(res, error_type.ERROR_NONEXHAUSTIVE_MATCH_PATTERNS)
+})
+
+test('match_tuple_and_lists', () => {
+    const res = parseAndTypecheck(`
+language core;
+
+extend with #multiparameter-functions, #sum-types, #structural-patterns, #tuples, #lists;
+
+fn main(n : Nat) -> Nat {
+  return match {{0}, true, [0]} {
+      {{0}, x, []} => 0
+    | {{0}, x, cons(0, s)} => 0
+    | {{0}, x, cons(0, cons(0, ss))} => 0
+    | {{0}, x, cons(succ(q), sss)} => 0
+    | {{succ(succ(n))}, x, l} => 0
+    | {{1}, false, l} => 0
+    | {{x}, true, l} => 0
+    //| _ => 0
+   }
+}
+`)
+    expectGood(res)
+})
+
+
+test('match_tuple_sum', () => {
+    const res = parseAndTypecheck(`
+language core;
+
+extend with #multiparameter-functions, #sum-types, #structural-patterns, #tuples, #lists;
+
+fn main(n : {Bool, Nat, {Bool + (Bool + Nat)}}) -> Nat {
   return match n {
     {a, x, {inl(true)}} => 0
   | {a, x, {inl(false)}} => 0
@@ -613,17 +728,48 @@ fn kek(n : {Bool, Nat, {Bool + (Bool + Nat)}}) -> Nat {
   | {a, x, {w}} => 0
   }
 }
+`)
+    expectGood(res)
+})
 
-fn main(n : Nat) -> Nat {
-  return match {{0}, true, [0]} {
-    	{{0}, x, []} => 0
-    | {{0}, x, cons(0, s)} => 0
-    | {{0}, x, cons(0, cons(0, ss))} => 0
-    | {{0}, x, cons(succ(q), ss)} => 0
-    | {{succ(succ(n))}, x, l} => 0
-    | {{1}, false, l} => 0
-    //| {{x}, true, l} => 0
-    //| _ => 0
-   }
+test('match_tuple_sum2', () => {
+    const res = parseAndTypecheck(`
+language core;
+
+extend with #multiparameter-functions, #sum-types, #structural-patterns, #tuples, #lists;
+
+fn main(n : {Bool, Nat, {Bool + (Bool + Nat)}}) -> Nat {
+  return match n {
+    {a, x, {inl(true)}} => 0
+  | {a, x, {inl(false)}} => 0
+  | {a, x, {inr(inl(false))}} => 0
+  | {a, x, {inr(inl(true))}} => 0
+  | {a, x, {inr(inr(0))}} => 0
+  | {a, x, {inr(inr(succ(z)))}} => 0
+  // | {a, x, {w}} => 0
+  }
 }
-* */
+`)
+    expectGood(res)
+})
+
+test('match_ne_tuple_sum', () => {
+    const res = parseAndTypecheck(`
+language core;
+
+extend with #multiparameter-functions, #sum-types, #structural-patterns, #tuples, #lists;
+
+fn main(n : {Bool, Nat, {Bool + (Bool + Nat)}}) -> Nat {
+  return match n {
+    {a, x, {inl(true)}} => 0
+  | {a, x, {inl(false)}} => 0
+  | {a, x, {inr(inl(false))}} => 0
+  | {a, x, {inr(inl(true))}} => 0
+  | {a, x, {inr(inr(0))}} => 0
+  // | {a, x, {inr(inr(succ(z)))}} => 0
+  // | {a, x, {w}} => 0
+  }
+}
+`)
+    expectTypeError(res, error_type.ERROR_NONEXHAUSTIVE_MATCH_PATTERNS)
+})

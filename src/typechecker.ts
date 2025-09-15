@@ -172,7 +172,12 @@ export function parseAndTypecheck(text: string): SyntaxErrorReport | TypeErrorsR
             errorListener.syntaxErrors
         )
     }
-    return checkProgram(parser, tree).addSource(text);
+    // try { // todo
+        return checkProgram(parser, tree).addSource(text);
+    // } catch (e) {
+
+        // return new GoodReport([], undefined)
+    // }
 }
 
 function findMainFn(tree: ProgramContext): DeclFunContext | undefined {

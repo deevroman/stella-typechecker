@@ -181,6 +181,36 @@ fn main(n : Nat) -> Nat {
     expectTypeError(res, error_type.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION)
 })
 
+test('if_cond_type_bad', () => {
+    const res = parseAndTypecheck(`
+language core;
+
+fn foo(b : Nat) -> Nat {
+    return 0
+}
+
+fn main(n : Nat) -> Nat {
+    return if foo then 0 else 0
+}
+`);
+    expectTypeError(res, error_type.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION)
+})
+
+test('if_cond_type_bad2', () => {
+    const res = parseAndTypecheck(`
+language core;
+
+fn foo(b : Nat) -> Bool {
+    return true
+}
+
+fn main(n : Nat) -> Nat {
+    return if foo then 0 else 0
+}
+`);
+    expectTypeError(res, error_type.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION)
+})
+
 test('unit_arg', () => {
     const res = parseAndTypecheck(`
 language core;

@@ -68,9 +68,23 @@ export class StellaType {
     }
 
     clone() : this {
-        const copy = Object.create(Object.getPrototypeOf(this))
-        Object.assign(copy, this)
-        return copy
+        // @ts-ignore
+        const deepClone = (obj, seen = new WeakMap()) => {
+            if (obj === null || typeof obj !== "object") {
+                return obj
+            }
+            if (seen.has(obj)) {
+                return seen.get(obj)
+            }
+            const copy = Object.create(Object.getPrototypeOf(obj))
+            seen.set(obj, copy)
+            for (const key of Reflect.ownKeys(obj)) {
+                copy[key] = deepClone(obj[key], seen)
+            }
+            return copy
+        }
+
+        return deepClone(this)
     }
     //
     // isSimpleType() {

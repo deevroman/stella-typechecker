@@ -150,6 +150,7 @@ export class stellaParserVisitorImpl implements stellaParserVisitor<void> {
     subtypingEnabled: boolean = false;
     exceptionType: StellaType | undefined;
     ambiguousTypeAsBottom: boolean = false;
+    typeReconstruction: boolean = false;
     maxIntInProgram: number = 0;
     maxListLenInProgram: number = 0;
 
@@ -160,6 +161,9 @@ export class stellaParserVisitorImpl implements stellaParserVisitor<void> {
         }
         if (extensions.includes("ambiguous-type-as-bottom")) {
             this.ambiguousTypeAsBottom = true;
+        }
+        if (extensions.includes("type-reconstruction")) {
+            this.typeReconstruction = true;
         }
         this.scopes = [{}]
         this.typeVarScopes = [{}]
@@ -362,35 +366,34 @@ export class stellaParserVisitorImpl implements stellaParserVisitor<void> {
 
     visitBinding(ctx: BindingContext): StellaEntityRecord | undefined {
         const contextType = this.getContextType()
-        if (contextType) {
-            if (contextType instanceof StellaRecord) {
-                const expectedValueType = contextType.findTypeByLabel(ctx._name.text!)
-                if (expectedValueType) {
-                    this.addContextType(expectedValueType)
+        if (contextType === undefined) {
+            return new StellaEntityRecord(ctx._name.text!, this.visitExpr(ctx._rhs)!);
+        }
+        if (contextType instanceof StellaRecord) {
+            const expectedValueType = contextType.findTypeByLabel(ctx._name.text!)
+            if (expectedValueType) {
+                this.addContextType(expectedValueType)
+                try {
+                    return new StellaEntityRecord(ctx._name.text!, this.visitExpr(ctx._rhs)!);
+                } finally {
+                    this.dropContextType()
+                }
+            } else {
+                if (this.subtypingEnabled) {
+                    this.addContextType(undefined)
                     try {
                         return new StellaEntityRecord(ctx._name.text!, this.visitExpr(ctx._rhs)!);
                     } finally {
                         this.dropContextType()
                     }
                 } else {
-                    if (this.subtypingEnabled) {
-                        this.addContextType(undefined)
-                        try {
-                            return new StellaEntityRecord(ctx._name.text!, this.visitExpr(ctx._rhs)!);
-                        } finally {
-                            this.dropContextType()
-                        }
-                    } else {
-                        this.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_RECORD_FIELDS))
-                        return
-                    }
+                    this.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_RECORD_FIELDS))
+                    return
                 }
-            } else {
-                this.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION))
-                return
             }
         } else {
-            return new StellaEntityRecord(ctx._name.text!, this.visitExpr(ctx._rhs)!);
+            this.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION))
+            return
         }
     }
 
@@ -662,9 +665,7 @@ export class stellaParserVisitorImpl implements stellaParserVisitor<void> {
         const type = this.visitExpr(ctx._condition)
         this.dropContextType()
         if (type?.type !== "BOOL_TYPE") {
-            if (type instanceof StellaFunction && type.returnType?.type !== "BOOL_TYPE") {
-                this.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION))
-            }
+            this.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION))
         }
         const thenType = this.visitExpr(ctx._thenExpr)
         let elseType;
@@ -942,12 +943,14 @@ export class stellaParserVisitorImpl implements stellaParserVisitor<void> {
             this.addError(new TypecheckError(error_type.ERROR_ILLEGAL_EMPTY_MATCHING))
             return
         }
-        for (const _case of ctx._cases) {
+        for (let i = 0; i < ctx._cases.length; i++) {
+            const _case = ctx._cases[i];
             this.openScope()
             this.addPatternType(matchType!);
             const casePatternType = _case._pattern_.accept(this)! as StellaType | undefined
             if (casePatternType === undefined) {
                 this.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_PATTERN_FOR_TYPE))
+                this.dropPatternType()
                 return
             }
             matchedTypeVariants.push(casePatternType)
@@ -1265,7 +1268,13 @@ export class stellaParserVisitorImpl implements stellaParserVisitor<void> {
 
     visitPatternRecord(ctx: PatternRecordContext): StellaType | undefined {
         const fields = []
+        const labels = new Set()
         for (const p of ctx._patterns) {
+            if (labels.has(p._label.text)) {
+                this.addError(new TypecheckError(error_type.ERROR_DUPLICATE_RECORD_PATTERN_FIELDS))
+                return
+            }
+            labels.add(p._label.text)
             const fieldType = p.accept(this) as StellaEntityRecord | undefined;
             if (fieldType === undefined) {
                 return
@@ -1278,6 +1287,7 @@ export class stellaParserVisitorImpl implements stellaParserVisitor<void> {
     visitPatternSucc(ctx: PatternSuccContext): StellaType | undefined {
         this.addPatternType(this.getPatternType())
         const valueType = ctx._pattern_.accept(this)! as StellaType | undefined
+        this.dropPatternType()
         if (valueType === undefined) {
             return undefined
         }
@@ -1289,9 +1299,8 @@ export class stellaParserVisitorImpl implements stellaParserVisitor<void> {
             return new StellaType("NAT_TYPE").addValue((parseInt(valueType.value ?? "0") + 1).toString(), valueType.isEqualValue)
         } else {
             this.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_PATTERN_FOR_TYPE))
+            return
         }
-        this.dropPatternType()
-        return new StellaType("NAT_TYPE") // todo
     }
 
     visitPatternTrue(ctx: PatternTrueContext): StellaType | undefined {

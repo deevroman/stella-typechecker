@@ -16,7 +16,8 @@ export function checkNoexhaustiveMatch(expectedType: StellaType, cases: StellaTy
         return true
     }
     const constructors = getAllConstructors(expectedType, ctx)
-    for (const constr of constructors) {
+    for (let i = 0; i < constructors.length; i++){
+        const constr = constructors[i];
         let res = false;
         for (let pat of cases) {
             if (tryMatch(constr, pat, ctx)) {
