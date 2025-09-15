@@ -7,11 +7,7 @@ import {expectGood, expectTypeError} from "./utils-for-tests";
 
 
 test('smoke', () => {
-    expect(parseAndTypecheck(example).ok).toBe(false)
-})
-
-test('smoke_check_error_type', () => {
-    expectTypeError(parseAndTypecheck(example), error_type.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION)
+    expectGood(parseAndTypecheck(example))
 })
 
 test('main not found', () => {
@@ -389,4 +385,50 @@ fn main(n : Nat) -> Nat {
 }
 `);
     expectGood(res)
+})
+
+test('example_big_bad', () => {
+    const res = parseAndTypecheck(`// a constant function, specialized to Nat
+language core;
+extend with
+  #unit-type,
+  #references,
+  #arithmetic-operators,
+  #sequencing,
+  #natural-literals,
+  #multiparameter-functions;
+  
+fn Nat2Nat::const(x : Nat, f : fn(Nat, Nat) -> Bool) -> (fn(Nat) -> (fn(Nat) -> Nat)) {
+  return fn(x : Nat) { return f }
+}
+
+// addition of natural numbers
+fn Nat::add(n : Nat) -> (fn(Nat) -> Nat) {
+  return fn(m : Nat) {
+    return Nat::rec(n, m, fn(i : Nat) {
+      return fn(r : Nat) { return succ(r) } })
+  }
+}
+
+// multiplication of natural numbers
+fn Nat::mul(n : Nat) -> (fn(Nat) -> Nat) {
+  return fn(m : Nat) {
+    return Nat::rec(n, 0, Nat2Nat::const(Nat::add(m)))
+  }
+}
+
+// factorial via primitive recursion
+fn factorial(n : Nat) -> Nat {
+  return Nat::rec(n, succ(0), fn(i : Nat) {
+    return fn(r : Nat) {
+    return Nat::mul(r)(succ(i))  // r := r * (i + 1)
+  } })
+}
+
+fn main(n : Nat) -> Nat {
+  return factorial(n)
+}
+
+`);
+    expectTypeError(res, error_type.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION)
 })

@@ -12,7 +12,7 @@ fn main(n : Nat) -> Nat {
   return factorial(n)
 }
 
-fn Nat2Nat::const(x : Nat, f : fn(Nat, Nat) -> Bool) -> (fn(Nat) -> (fn(Nat) -> Nat)) {
+fn Nat2Nat::const(f : fn(Nat) -> Nat) -> (fn(Nat) -> (fn(Nat) -> Nat)) {
   return fn(x : Nat) { return f }
 }
 
@@ -42,5 +42,4 @@ fn factorial(n : Nat) -> Nat {
 fn main(n : Nat) -> Nat {
   return factorial(n)
 }
-
 `
