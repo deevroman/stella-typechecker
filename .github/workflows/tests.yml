@@ -1,8 +1,11 @@
-name: Run tests
+name: Deploy and tests
 on:
   push:
     branches:
-      - "**"
+      - "master"
+
+permissions:
+  contents: write
 
 jobs:
   run-tests:
