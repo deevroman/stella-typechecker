@@ -137,6 +137,7 @@ fn main(n : auto) -> auto {
     expectGood(res);
 })
 
+
 test('auto_fix', () => {
     const res = parseAndTypecheck(`
 language core;

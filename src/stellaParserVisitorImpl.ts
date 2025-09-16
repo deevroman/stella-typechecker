@@ -714,7 +714,6 @@ export class stellaParserVisitorImpl implements stellaParserVisitor<void> {
         if (condType instanceof StellaAuto) {
             this.addConstraint(condType, new StellaType("BOOL_TYPE"))
         } else if (condType.type !== "BOOL_TYPE") {
-            // this.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION))
             this.addError(new ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION(new StellaType("BOOL_TYPE"), condType))
         }
         const thenType = this.visitExpr(ctx._thenExpr)

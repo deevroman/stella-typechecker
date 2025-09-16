@@ -1,5 +1,5 @@
 import {stellaParserVisitorImpl} from "./stellaParserVisitorImpl";
-import {error_type, TypecheckError} from "./typecheckError";
+import {error_type, ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION, TypecheckError} from "./typecheckError";
 
 type StellaTypeEnum =
     "UNIT_TYPE" |
@@ -110,7 +110,7 @@ export class StellaType {
             if (ctx.subtypingEnabled) {
                 ctx.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_SUBTYPE))
             } else {
-                ctx.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION))
+                ctx.addError(new ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION(this, oth))
             }
         }
     }
@@ -206,11 +206,11 @@ export class StellaGenericVarType extends StellaType {
             if (ctx.subtypingEnabled) {
                 ctx.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_SUBTYPE))
             } else {
-                ctx.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION))
+                ctx.addError(new ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION(this, oth))
             }
         } else {
             if (this.genericName !== (oth as StellaGenericVarType).genericName) {
-                ctx.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION))
+                ctx.addError(new ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION(this, oth))
             }
         }
     }
@@ -264,16 +264,16 @@ export class StellaFunction extends StellaType {
             ctx.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_SUBTYPE))
         }
         if (!(oth instanceof StellaFunction)) {
-            ctx.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION))
+            ctx.addError(new ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION(this, oth))
             return
         }
         // todo names?
         if (this.genericsList.length !== oth.genericsList.length) {
-            ctx.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION))
+            ctx.addError(new ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION(this, oth))
             return;
         }
         if (this.argsTypes.length !== oth.argsTypes.length) {
-            ctx.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION))
+            ctx.addError(new ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION(this, oth))
             return;
         }
         // const prevErrors = ctx.type_errors
@@ -375,7 +375,7 @@ export class StellaList extends StellaType {
             ctx.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_SUBTYPE))
         }
         if (!(oth instanceof StellaList)) {
-            ctx.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION))
+            ctx.addError(new ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION(this, oth))
             return
         }
         if (this.parameterType.type !== "_EMPTY_LIST_TYPE") {
@@ -648,7 +648,7 @@ export class StellaRecord extends StellaType {
                 }
             }
             if (this.entities.length < oth.entities.length) {
-                ctx.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION))
+                ctx.addError(new ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION(this, oth))
             }
         } else {
             if (!this.pinnedFieldOrder) {
@@ -675,7 +675,7 @@ export class StellaRecord extends StellaType {
                     if (othType) {
                         thisType.tryAssignTo(othType, ctx)
                     } else {
-                        ctx.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION))
+                        ctx.addError(new ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION(this, oth))
                     }
                 }
             } else {
@@ -683,7 +683,7 @@ export class StellaRecord extends StellaType {
                     const [othLabel, othType] = oth.entities[i]
                     if (this.entities[i] === undefined) {
                         if (this.findTypeByLabel(othLabel)) {
-                            ctx.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION))
+                            ctx.addError(new ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION(this, oth))
                         } else {
                             ctx.addError(new TypecheckError(error_type.ERROR_MISSING_RECORD_FIELDS))
                         }
@@ -692,7 +692,7 @@ export class StellaRecord extends StellaType {
                     const [thisLabel, thisType] = this.entities[i]
                     if (othLabel !== thisLabel) {
                         if (this.findTypeByLabel(othLabel)) {
-                            ctx.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION))
+                            ctx.addError(new ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION(this, oth))
                         } else {
                             ctx.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_RECORD_FIELDS))
                         }
@@ -711,7 +711,7 @@ export class StellaRecord extends StellaType {
                     if (oth.findTypeByLabel(thisLabel)) {
                         ctx.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_RECORD_FIELDS))
                     } else {
-                        ctx.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION))
+                        ctx.addError(new ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION(this, oth))
                     }
                 }
             }
@@ -805,7 +805,7 @@ export class StellaVariant extends StellaType {
             const thisType = this.entities[0][1]
             const typeInOth = oth.findTypeByLabel(thisLabel)
             if (typeInOth === undefined) {
-                ctx.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION))
+                ctx.addError(new ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION(this, oth))
             } else {
                 thisType.tryAssignTo(typeInOth, ctx)
             }
@@ -813,7 +813,7 @@ export class StellaVariant extends StellaType {
         }
         if (ctx.subtypingEnabled) {
             if (this.entities.length > oth.entities.length) {
-                ctx.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION))
+                ctx.addError(new ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION(this, oth))
             }
             for (let i = 0; i < this.entities.length; i++) {
                 const [thisLabel, thisType] = this.entities[i]
@@ -826,13 +826,13 @@ export class StellaVariant extends StellaType {
             }
         } else {
             if (this.entities.length !== oth.entities.length) {
-                ctx.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION))
+                ctx.addError(new ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION(this, oth))
             }
             for (let i = 0; i < this.entities.length; i++) {
                 const [thisLabel, thisType] = this.entities[i]
                 const [othLabel, othType] = oth.entities[i]
                 if (thisLabel !== othLabel) {
-                    ctx.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION))
+                    ctx.addError(new ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION(this, oth))
                 }
                 thisType.tryAssignTo(othType, ctx)
             }
@@ -896,7 +896,7 @@ export class StellaBot extends StellaType {
         if (ctx.subtypingEnabled) {
             return;
         } else {
-            ctx.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION))
+            ctx.addError(new ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION(this, oth))
         }
     }
 

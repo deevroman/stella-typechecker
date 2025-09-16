@@ -4,7 +4,14 @@ import {error_type, TypecheckError} from "../typecheckError";
 
 export function expectTypeError(res: SyntaxErrorReport | TypeErrorsReport | GoodReport, expectError: error_type) {
     expect(res).instanceof(TypeErrorsReport);
-    expect((res as TypeErrorsReport).errors[0].type).toBe(expectError)
+    try {
+        expect((res as TypeErrorsReport).errors[0].type).toBe(expectError)
+    } finally {
+        if (res instanceof TypeErrorsReport) {
+            console.error(res.errors[0].type + ":")
+            console.error(res.errors[0].prettyPrint())
+        }
+    }
 }
 
 export function expectGood(res: SyntaxErrorReport | TypeErrorsReport | GoodReport) {

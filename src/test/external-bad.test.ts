@@ -29,6 +29,7 @@ test.each(files)('$error_type/$name', ({error_type, name, fullPath}) => {
     const result = parseAndTypecheck(source)
     expect(result).instanceof(TypeErrorsReport)
     const firstError = (result as TypeErrorsReport).errors[0].type
-    console.log(firstError)
+    console.error((result as TypeErrorsReport).errors[0].type + ":")
+    console.error((result as TypeErrorsReport).errors[0].prettyPrint())
     expect(allowedErrors).toContain(firstError)
 })
