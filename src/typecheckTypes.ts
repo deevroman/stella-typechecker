@@ -711,7 +711,7 @@ export class StellaRecord extends StellaType {
             ctx.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_SUBTYPE))
         }
         if (!(oth instanceof StellaRecord)) {
-            ctx.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_RECORD))
+            ctx.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION))
             return
         }
         if (ctx.subtypingEnabled) {

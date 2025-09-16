@@ -1,7 +1,5 @@
 import {expect, test} from 'vitest'
-import {SyntaxErrorReport, parseAndTypecheck, TypeErrorsReport, GoodReport} from "../typechecker";
-import {example} from "../examples";
-import {tokenInfo} from "../utils";
+import {parseAndTypecheck, TypeErrorsReport} from "../typechecker";
 import {error_type} from "../typecheckError";
 import {expectGood, expectTypeError} from "./utils-for-tests";
 
@@ -58,6 +56,26 @@ fn main(n : Nat) -> Nat {
 }
     `);
     expectGood(res);
+})
+
+test('record_in_record_in_in_in_bad', () => {
+    const res = parseAndTypecheck(`
+language core;
+extend with #records;
+
+fn main(x : Nat) -> Nat {
+  return
+    { x = { x = { x = { x = false, y = 0}
+                , a = { x = 0, y = 0, z = true}}
+          , y = { x = { x = false, y = 0}
+                , y = { x = false, y = 0}}}
+    , y = { a = { x = { x = 0, y = 0}
+                , y = { x = 0, y = 0}}
+          , y = { x = { a = 0, y = 0}
+                , y = { x = false, y = 0}}}}.x.y.x
+}
+    `);
+    expectTypeError(res, error_type.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION);
 })
 
 test('record_as_arg', () => {
@@ -381,13 +399,3 @@ fn main(succeed : Nat) -> { a : Nat, b : Nat } {
 `);
     expectGood(res)
 })
-
-
-/*
-test('stub', () => {
-    const res = parseAndTypecheck("language core; fn main(n : Nat) -> Nat {return f(n)}");
-    expect(res).instanceof(TypeErrorsReport)
-    const errors = (res as TypeErrorsReport).errors.map(i => [i.type, ...tokenInfo(i.token!)])
-    expect(errors).toStrictEqual([["ERROR_UNDEFINED_VARIABLE", "f", 14,]])
-})
-*/
