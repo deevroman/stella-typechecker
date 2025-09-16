@@ -622,7 +622,7 @@ export class StellaTuple extends StellaType {
             ctx.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_SUBTYPE))
         }
         if (!(oth instanceof StellaTuple)) {
-            ctx.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_TUPLE))
+            ctx.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION))
             return
         }
         if (this.elems.length !== oth.elems.length) {

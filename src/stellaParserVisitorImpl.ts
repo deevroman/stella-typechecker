@@ -451,7 +451,11 @@ export class stellaParserVisitorImpl implements stellaParserVisitor<void> {
             } else if (contextType instanceof StellaTop && this.subtypingEnabled) {
                 this.addContextType(contextType)
             } else {
-                this.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_LIST))
+                if (this.typeReconstruction) {
+                    this.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION))
+                } else {
+                    this.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_LIST))
+                }
                 return
             }
         } else {
@@ -797,7 +801,11 @@ export class stellaParserVisitorImpl implements stellaParserVisitor<void> {
             return
         }
         if (!(contextType instanceof StellaSumType) && !(contextType instanceof StellaAuto)) {
-            this.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_INJECTION))
+            if (this.typeReconstruction) {
+                this.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION))
+            } else {
+                this.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_INJECTION))
+            }
             return undefined
         }
         if (contextType instanceof StellaAuto) {
@@ -852,7 +860,11 @@ export class stellaParserVisitorImpl implements stellaParserVisitor<void> {
             return
         }
         if (!(contextType instanceof StellaSumType) && !(contextType instanceof StellaAuto)) {
-            this.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_INJECTION))
+            if (this.typeReconstruction) {
+                this.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION))
+            } else {
+                this.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_INJECTION))
+            }
             return undefined
         }
         if (contextType instanceof StellaAuto) {
@@ -1006,6 +1018,8 @@ export class stellaParserVisitorImpl implements stellaParserVisitor<void> {
             } else {
                 if (elemsCount === 0 && !this.ambiguousTypeAsBottom) {
                     this.addError(new TypecheckError(error_type.ERROR_AMBIGUOUS_LIST_TYPE))
+                } else if (this.typeReconstruction) {
+                    this.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION))
                 } else {
                     this.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_LIST))
                 }
@@ -1089,7 +1103,11 @@ export class stellaParserVisitorImpl implements stellaParserVisitor<void> {
                     if (!(returnTypes[0] instanceof StellaAuto)) {
                         if (returnTypes[0].type !== value.type) {
                             if (value instanceof StellaList) {
-                                this.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_LIST))
+                                if (this.typeReconstruction) { // tmp hack
+                                    this.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION))
+                                } else {
+                                    this.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_LIST))
+                                }
                             } else {
                                 this.addError(new TypecheckError(error_type.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION))
                             }

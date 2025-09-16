@@ -437,3 +437,92 @@ fn main(arg : Nat) -> [[Bool]] {
 `);
     expectTypeError(res, error_type.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION)
 })
+
+test('auto_list_bad4', () => {
+    const res = parseAndTypecheck(`
+language core;
+
+extend with #type-reconstruction, #lists;
+
+fn main(arg : auto) -> Nat {
+  return [arg, 0]
+}
+`);
+    expectTypeError(res, error_type.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION)
+})
+
+test('auto_list_bad5', () => {
+    const res = parseAndTypecheck(`
+language core;
+
+extend with #type-reconstruction, #lists;
+
+fn main(n : Nat) -> Nat {
+  return (fn (a : Nat) { 
+    return match(0) {
+      x => x
+      | y => []
+    }
+  }) (0)
+}
+`);
+    expectTypeError(res, error_type.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION)
+})
+
+test('auto_cons', () => {
+    const res = parseAndTypecheck(`
+language core;
+
+extend with #type-reconstruction, #lists;
+
+fn main(n : Nat) -> Nat {
+  return cons(0, []);
+}
+`);
+    expectTypeError(res, error_type.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION)
+})
+
+test('auto_inr', () => {
+    const res = parseAndTypecheck(`
+language core;
+
+extend with #type-reconstruction, #sum-types;
+
+fn main(input : Bool) -> Nat {
+  return inr(0)
+}
+`);
+    expectTypeError(res, error_type.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION)
+})
+
+test('auto_inl', () => {
+    const res = parseAndTypecheck(`
+language core;
+
+extend with #type-reconstruction, #sum-types;
+
+fn main(input : Bool) -> Nat {
+  return inl(0)
+}
+`);
+    expectTypeError(res, error_type.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION)
+})
+
+test('auto_match', () => {
+    const res = parseAndTypecheck(`
+language core;
+
+extend with #sum-types, #unit-type, #type-reconstruction;
+
+fn test(first : auto) -> auto {
+  return if first then inl(succ(0)) else inr(unit)
+}
+
+fn main(input : auto) -> auto {
+  return match test(input) {
+      inl(n) => n
+  }
+}
+`);
+    expectTypeError(res, error_type.ERROR_NONEXHAUSTIVE_MATCH_PATTERNS)
+})

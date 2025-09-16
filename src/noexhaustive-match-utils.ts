@@ -13,11 +13,19 @@ import {
 import {stellaParserVisitorImpl} from "./stellaParserVisitorImpl";
 
 export function checkNoexhaustiveMatch(expectedType: StellaType, cases: StellaType[], ctx: stellaParserVisitorImpl): boolean {
-    if (cases.some(_case => _case.varName === "_")) {
+    if (cases.some(_case => _case.varName !== "")) {
         return true
     }
     if (cases.some(_case => _case instanceof StellaAuto)) {
         return true // hack
+    }
+    if (expectedType instanceof StellaAuto) {
+        if (cases.length > 1) {
+            return true // todo dirty hack
+        } else {
+            ctx.addError(new TypecheckError(error_type.ERROR_NONEXHAUSTIVE_MATCH_PATTERNS))
+            return false
+        }
     }
     const constructors = getAllConstructors(expectedType, ctx)
     for (let i = 0; i < constructors.length; i++){

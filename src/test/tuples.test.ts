@@ -28,6 +28,25 @@ fn main(f : Nat) -> { Nat, Nat } {
     expectTypeError(res, error_type.ERROR_NOT_A_FUNCTION)
 })
 
+test('pair_bad2', () => {
+    const res = parseAndTypecheck(`
+language core;
+
+extend with #pairs;
+
+fn main(x : Nat) -> Nat {
+  return (fn(x : Nat) { 
+    return { 
+      { { x, x }, { x, x } },
+      { { x, Nat::iszero(x) }, { x, x } }
+    } 
+  })(0).2.1
+}
+
+`);
+    expectTypeError(res, error_type.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION)
+})
+
 test('tuple', () => {
     const res = parseAndTypecheck(`
 language core;
