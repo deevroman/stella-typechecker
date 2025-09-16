@@ -12,7 +12,8 @@ import {ANTLRErrorListener, RecognitionException, Recognizer} from 'antlr4ts';
 import {TypesCollector} from './typesCollector'
 import {stellaParserVisitorImpl} from "./stellaParserVisitorImpl";
 import {error_type, TypecheckError} from "./typecheckError";
-import {StellaEntityVariant, StellaType, StellaVariant} from "./typecheckTypes";
+import {StellaAuto, StellaEntityVariant, StellaType, StellaVariant} from "./typecheckTypes";
+import {checkConstrains} from "./reconstruction";
 
 class BufferedErrorListener implements ANTLRErrorListener<any> {
     public syntaxErrors: SyntaxError[] = [];
@@ -141,8 +142,11 @@ function checkProgram(parser: stellaParser, tree: ProgramContext) {
         }
         errors.push(...visitor.type_errors);
     }
-    if (visitor.constraints.length) {
-        debugger
+    if (errors.length === 0 && visitor.typeReconstruction && visitor.constraints.length) {
+        const err = checkConstrains(visitor.constraints)
+        if (err) {
+            errors.push(err)
+        }
     }
 
     if (errors.length) {
@@ -169,6 +173,7 @@ function checkProgram(parser: stellaParser, tree: ProgramContext) {
 
 
 export function parseAndTypecheck(text: string): SyntaxErrorReport | TypeErrorsReport | GoodReport {
+    StellaAuto.resetFreshVarCounter()
     const inputStream = new ANTLRInputStream(text);
     const lexer = new stellaLexer(inputStream);
     const tokenStream = new CommonTokenStream(lexer);

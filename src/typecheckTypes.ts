@@ -67,7 +67,7 @@ export class StellaType {
         return this.genericsList.length !== 0
     }
 
-    clone() : this {
+    clone(): this {
         // @ts-ignore
         const deepClone = (obj, seen = new WeakMap()) => {
             if (obj === null || typeof obj !== "object") {
@@ -86,12 +86,16 @@ export class StellaType {
 
         return deepClone(this)
     }
+
     //
     // isSimpleType() {
     //     return simpleTypes.includes(this.type)
     // }
 
-    isEqualType(oth: StellaType | undefined) {
+    isEqualType(oth: StellaType | undefined, strictAutoCheck: boolean = true) {
+        if (!strictAutoCheck && oth instanceof StellaAuto) {
+            return true
+        }
         return this.type === oth?.type
     }
 
@@ -115,11 +119,11 @@ export class StellaType {
         }
     }
 
-    substituteGenerics(genericsMap: Record<string, StellaType>) : StellaType {
+    substituteGenerics(genericsMap: Record<string, StellaType>): StellaType {
         return this
     }
 
-    prettyPrint() : string {
+    prettyPrint(): string {
         switch (this.type) {
             case "UNIT_TYPE":
                 return "Unit"
@@ -130,6 +134,14 @@ export class StellaType {
             default:
                 return this.type
         }
+    }
+
+    substituteAuto(a: StellaAuto, type: StellaType): StellaType {
+        return this
+    }
+
+    containsThatAuto(a: StellaAuto): boolean {
+        return false
     }
 }
 
@@ -147,7 +159,11 @@ export class StellaAuto extends StellaType {
         this.type = "AUTO_TYPE";
     }
 
-    private static freshVarCounter = 1;
+    private static freshVarCounter = 1; // static...
+
+    static resetFreshVarCounter() {
+        StellaAuto.freshVarCounter = 1;
+    }
 
     addFreshTypeVar() {
         this.typeVarID = StellaAuto.freshVarCounter
@@ -155,12 +171,34 @@ export class StellaAuto extends StellaType {
         return this;
     }
 
-    static makeNewTypeVar() : StellaAuto {
+    static makeNewTypeVar(): StellaAuto {
         return new StellaAuto().addFreshTypeVar()
+    }
+
+    isEqualType(oth: StellaType | undefined, strictAutoCheck: boolean = true): boolean {
+        if (!strictAutoCheck) {
+            return true
+        }
+        return oth instanceof StellaAuto && this.typeVarID === oth.typeVarID;
     }
 
     tryAssignTo(oth: StellaType, ctx: stellaParserVisitorImpl) {
         ctx.addConstraint(this, oth)
+    }
+
+    prettyPrint(): string {
+        return "T" + this.typeVarID
+    }
+
+    substituteAuto(a: StellaAuto, type: StellaType): StellaType {
+        if (this.typeVarID === a.typeVarID) {
+            return type
+        }
+        return this
+    }
+
+    containsThatAuto(a: StellaAuto): boolean {
+        return this.typeVarID === a.typeVarID
     }
 }
 
@@ -215,11 +253,15 @@ export class StellaGenericVarType extends StellaType {
         }
     }
 
-    substituteGenerics(genericsMap: Record<string, StellaType>) : StellaType {
+    substituteGenerics(genericsMap: Record<string, StellaType>): StellaType {
         if (genericsMap[this.genericName]) {
             return genericsMap[this.genericName]
         }
         return this
+    }
+
+    prettyPrint(): string {
+        return this.genericName
     }
 }
 
@@ -236,19 +278,22 @@ export class StellaFunction extends StellaType {
     }
 
 
-    isEqualType(oth: StellaType | undefined): boolean {
-        if (!super.isEqualType(oth)) {
+    isEqualType(oth: StellaType | undefined, strictAutoCheck: boolean = true): boolean {
+        if (!strictAutoCheck && oth instanceof StellaAuto) {
+            return true
+        }
+        if (!super.isEqualType(oth, strictAutoCheck)) {
             return false;
         }
         if (this.argsTypes.length !== (oth as StellaFunction).argsTypes.length) {
             return false;
         }
         for (let i = 0; i < this.argsTypes.length; i++) {
-            if (!this.argsTypes[i].isEqualType((oth as StellaFunction).argsTypes[i])) {
+            if (!this.argsTypes[i].isEqualType((oth as StellaFunction).argsTypes[i], strictAutoCheck)) {
                 return false;
             }
         }
-        return this.returnType.isEqualType((oth as StellaFunction).returnType)
+        return this.returnType.isEqualType((oth as StellaFunction).returnType, strictAutoCheck)
     }
 
 
@@ -291,7 +336,7 @@ export class StellaFunction extends StellaType {
 
     }
 
-    substituteGenerics(genericsMap: Record<string, StellaType>) : StellaType {
+    substituteGenerics(genericsMap: Record<string, StellaType>): StellaType {
         let newRemainingGenerics = []
         const newArgs: StellaType[] = []
         this.argsTypes.forEach(i => {
@@ -307,6 +352,25 @@ export class StellaFunction extends StellaType {
 
     prettyPrint(): string {
         return `fn (${this.argsTypes.map(i => i.prettyPrint()).join(", ")}) -> ${this.returnType.prettyPrint()}`;
+    }
+
+    substituteAuto(a: StellaAuto, type: StellaType): StellaType {
+        const newArgs: StellaType[] = []
+        this.argsTypes.forEach(i => {
+            const newArg = i.substituteAuto(a, type)
+            newArgs.push(newArg)
+        })
+        const newReturnType = this.returnType.substituteAuto(a, type)
+        return new StellaFunction(newArgs, newReturnType)
+    }
+
+    containsThatAuto(a: StellaAuto): boolean {
+        for (const arg of this.argsTypes) {
+            if (arg.containsThatAuto(a)) {
+                return true
+            }
+        }
+        return this.returnType.containsThatAuto(a)
     }
 }
 
@@ -332,35 +396,38 @@ export class StellaList extends StellaType {
         return this.parameterType.type === "_EMPTY_LIST_TYPE"
     }
 
-    setMinLength(len: number) : this {
+    setMinLength(len: number): this {
         this.isInfiniteList = true
         this.minLength = len
         return this
     }
 
-    setFixedLength(len: number) : this {
+    setFixedLength(len: number): this {
         this.isFixedList = true
         this.fixedLength = len
         return this
     }
 
-    isFixedLength() : boolean {
+    isFixedLength(): boolean {
         return this.isFixedList
     }
 
-    setFixedElems(elems: StellaType[]) : this {
+    setFixedElems(elems: StellaType[]): this {
         this.fixedElems = elems
         return this
     }
 
-    isEqualType(oth: StellaType | undefined): boolean {
-        if (!super.isEqualType(oth)) {
+    isEqualType(oth: StellaType | undefined, strictAutoCheck: boolean = true): boolean {
+        if (!strictAutoCheck && oth instanceof StellaAuto) {
+            return true
+        }
+        if (!super.isEqualType(oth, strictAutoCheck)) {
             return false;
         }
         if (this.parameterType?.type === "_EMPTY_LIST_TYPE") {
             return true;
         }
-        return this.parameterType!.isEqualType((oth as StellaList)?.parameterType);
+        return this.parameterType!.isEqualType((oth as StellaList)?.parameterType, strictAutoCheck);
     }
 
     tryAssignTo(oth: StellaType, ctx: stellaParserVisitorImpl) {
@@ -383,7 +450,7 @@ export class StellaList extends StellaType {
         }
     }
 
-    substituteGenerics(genericsMap: Record<string, StellaType>) : StellaType {
+    substituteGenerics(genericsMap: Record<string, StellaType>): StellaType {
         const newParameterType = this.parameterType.substituteGenerics(genericsMap)
         return new StellaList(newParameterType)
     }
@@ -402,7 +469,10 @@ export class StellaRef extends StellaType {
         this.parameterType = parameterType;
     }
 
-    isEqualType(oth: StellaType | undefined): boolean {
+    isEqualType(oth: StellaType | undefined, strictAutoCheck: boolean = true): boolean {
+        if (!strictAutoCheck && oth instanceof StellaAuto) {
+            return true
+        }
         if (!super.isEqualType(oth)) {
             return false;
         }
@@ -435,7 +505,7 @@ export class StellaRef extends StellaType {
         }
     }
 
-    substituteGenerics(genericsMap: Record<string, StellaType>) : StellaType {
+    substituteGenerics(genericsMap: Record<string, StellaType>): StellaType {
         const newParameterType = this.parameterType.substituteGenerics(genericsMap)
         return new StellaRef(newParameterType)
     }
@@ -473,10 +543,13 @@ export class StellaSumType extends StellaType {
         return this
     }
 
-    isEqualType(oth: StellaType | undefined): boolean {
-        return super.isEqualType(oth)
-            && this.leftType!.isEqualType((oth as StellaSumType).leftType)
-            && this.rightType!.isEqualType((oth as StellaSumType).rightType);
+    isEqualType(oth: StellaType | undefined, strictAutoCheck: boolean = true): boolean {
+        if (!strictAutoCheck && oth instanceof StellaAuto) {
+            return true
+        }
+        return super.isEqualType(oth, strictAutoCheck)
+            && this.leftType!.isEqualType((oth as StellaSumType).leftType, strictAutoCheck)
+            && this.rightType!.isEqualType((oth as StellaSumType).rightType, strictAutoCheck);
     }
 
     tryAssignTo(oth: StellaType, ctx: stellaParserVisitorImpl) {
@@ -498,14 +571,14 @@ export class StellaSumType extends StellaType {
         this.rightType!.tryAssignTo(oth.rightType!, ctx)
     }
 
-    substituteGenerics(genericsMap: Record<string, StellaType>) : StellaType {
+    substituteGenerics(genericsMap: Record<string, StellaType>): StellaType {
         const newLeftType = this.leftType!.substituteGenerics(genericsMap)
         const newRightType = this.rightType!.substituteGenerics(genericsMap)
         return new StellaSumType(newLeftType, newRightType)
     }
 
     prettyPrint(): string {
-        return `(${this.leftType!.prettyPrint() + this.rightType!.prettyPrint()})`;
+        return `(${this.leftType!.prettyPrint()} + ${this.rightType!.prettyPrint()})`;
     }
 }
 
@@ -518,8 +591,11 @@ export class StellaTuple extends StellaType {
         this.elems = elems;
     }
 
-    isEqualType(oth: StellaType | undefined): boolean {
-        if (!super.isEqualType(oth)) {
+    isEqualType(oth: StellaType | undefined, strictAutoCheck: boolean = true): boolean {
+        if (!strictAutoCheck && oth instanceof StellaAuto) {
+            return true
+        }
+        if (!super.isEqualType(oth, strictAutoCheck)) {
             return false
         }
         if (this.elems.length !== (oth as StellaTuple).elems.length) {
@@ -527,7 +603,7 @@ export class StellaTuple extends StellaType {
         }
         for (let i = 0; i < this.elems.length; i++) {
             const othElem = (oth as StellaTuple).elems[i];
-            if (!this.elems[i].isEqualType(othElem)) {
+            if (!this.elems[i].isEqualType(othElem, strictAutoCheck)) {
                 return false;
             }
         }
@@ -558,7 +634,7 @@ export class StellaTuple extends StellaType {
         }
     }
 
-    substituteGenerics(genericsMap: Record<string, StellaType>) : StellaType {
+    substituteGenerics(genericsMap: Record<string, StellaType>): StellaType {
         const newElems: StellaType[] = []
         this.elems.forEach(i => {
             newElems.push(i.substituteGenerics(genericsMap))
@@ -599,8 +675,11 @@ export class StellaRecord extends StellaType {
         this.pinnedFieldOrder = pinnedFieldOrder
     }
 
-    isEqualType(oth: StellaType | undefined): boolean {
-        if (!super.isEqualType(oth)) {
+    isEqualType(oth: StellaType | undefined, strictAutoCheck: boolean = true): boolean {
+        if (!strictAutoCheck && oth instanceof StellaAuto) {
+            return true
+        }
+        if (!super.isEqualType(oth, strictAutoCheck)) {
             return false
         }
         if (!(oth instanceof StellaRecord)) {
@@ -613,7 +692,7 @@ export class StellaRecord extends StellaType {
             if (this.entities[i][0] !== oth.entities[i][0]) {
                 return false
             }
-            if (this.entities[i][1].isEqualType(oth.entities[i][1])) {
+            if (this.entities[i][1].isEqualType(oth.entities[i][1], strictAutoCheck)) {
                 return false
             }
         }
@@ -722,7 +801,7 @@ export class StellaRecord extends StellaType {
         return this.entitiesIndex[label]
     }
 
-    substituteGenerics(genericsMap: Record<string, StellaType>) : StellaType {
+    substituteGenerics(genericsMap: Record<string, StellaType>): StellaType {
         const newEntities: StellaEntityRecord[] = []
         this.entities.forEach(([name, type]) => {
             newEntities.push(new StellaEntityRecord(name, type.substituteGenerics(genericsMap)))
@@ -764,7 +843,10 @@ export class StellaVariant extends StellaType {
         this.entitiesIndex = Object.fromEntries(entities.map(e => [e.key, e.valueType!]));
     }
 
-    isEqualType(oth: StellaType | undefined): boolean {
+    isEqualType(oth: StellaType | undefined, strictAutoCheck: boolean = true): boolean {
+        if (!strictAutoCheck && oth instanceof StellaAuto) {
+            return true
+        }
         if (!super.isEqualType(oth)) {
             return false
         }
@@ -778,7 +860,7 @@ export class StellaVariant extends StellaType {
             if (this.entities[i][0] !== oth.entities[i][0]) {
                 return false
             }
-            if (this.entities[i][1].isEqualType(oth.entities[i][1])) {
+            if (this.entities[i][1].isEqualType(oth.entities[i][1], strictAutoCheck)) {
                 return false
             }
         }
@@ -843,7 +925,7 @@ export class StellaVariant extends StellaType {
         return this.entitiesIndex[label]
     }
 
-    substituteGenerics(genericsMap: Record<string, StellaType>) : StellaType {
+    substituteGenerics(genericsMap: Record<string, StellaType>): StellaType {
         const newEntities: StellaEntityVariant[] = []
         this.entities.forEach(([name, type]) => {
             newEntities.push(new StellaEntityVariant(name, type.substituteGenerics(genericsMap)))

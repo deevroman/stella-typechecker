@@ -21,7 +21,8 @@ export function expectGood(res: SyntaxErrorReport | TypeErrorsReport | GoodRepor
     } catch (e) {
         if (res instanceof TypeErrorsReport) {
             res.errors.forEach(err => {
-                console.error(err.type)
+                console.error(res.errors[0].type + ":")
+                console.error(res.errors[0].prettyPrint())
                 // @ts-ignore
                 console.error(err.stack)
             })

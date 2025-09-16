@@ -98,3 +98,22 @@ export class ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION extends TypecheckError {
 `
     }
 }
+
+export class ERROR_OCCURS_CHECK_INFINITE_TYPE extends TypecheckError {
+    left: StellaType
+    right: StellaType
+
+    constructor(left: StellaType, right: StellaType, expr: any = undefined) {
+        super(error_type.ERROR_OCCURS_CHECK_INFINITE_TYPE, undefined);
+        this.left = left
+        this.right = right
+    }
+
+    prettyPrint(): string {
+        return `при попытке унифицировать ожидаемый тип
+  ${this.left.prettyPrint()}
+с полученным типом
+  ${this.right.prettyPrint()}
+`
+    }
+}

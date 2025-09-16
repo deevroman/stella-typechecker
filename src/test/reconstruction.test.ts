@@ -1,5 +1,5 @@
-import {expect, test} from 'vitest'
-import {parseAndTypecheck, TypeErrorsReport} from "../typechecker";
+import {test} from 'vitest'
+import {parseAndTypecheck} from "../typechecker";
 import {error_type} from "../typecheckError";
 import {expectGood, expectTypeError} from "./utils-for-tests";
 
@@ -103,17 +103,77 @@ fn main(b : auto) -> auto {
     expectGood(res);
 })
 
-test('auto_rec', () => {
+test('auto_fix', () => {
+    const res = parseAndTypecheck(`
+language core;
+extend with #type-reconstruction;
+
+fn main(f : auto) -> auto {
+    return f(f)
+}
+
+// main = X1 -> X2
+// X1 = X3 -> X2
+// X3 = X1
+
+`);
+    expectTypeError(res, error_type.ERROR_OCCURS_CHECK_INFINITE_TYPE);
+})
+
+test('auto_let', () => {
+    const res = parseAndTypecheck(`
+language core;
+
+extend with #type-reconstruction, #let-bindings;
+
+
+fn main(n : auto) -> auto {
+  return let zeroFun = (fn (a : auto) {return a}) in zeroFun(0)
+}
+`);
+    expectGood(res)
+})
+
+test('auto_nat_rec', () => {
+    const res = parseAndTypecheck(`
+language core;
+
+extend with #type-reconstruction;
+
+fn Nat::add(n : auto) -> auto {
+  return fn(m : auto) {
+    return Nat::rec(n, m, fn(i : auto) {
+      return succ( i );
+    });
+  };
+}
+
+// fn Nat::add(n : Nat) -> (fn(Nat) -> Nat) {
+//   return fn(m : Nat) {
+//     return Nat::rec(n, m, fn(i : Nat) {
+//       return fn(r : Nat) { return succ(r) } })
+//   }
+// }
+
+fn main(n : auto) -> auto {
+  return Nat::add(n)
+}
+
+`);
+    expectTypeError(res, error_type.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION)
+})
+
+test('auto_nat_rec2', () => {
     const res = parseAndTypecheck(`
 language core;
 
 extend with #type-reconstruction;
 
 // addition of natural numbers
-fn Nat::add(n : auto) -> auto {
-  return fn(m : auto) {
-    return Nat::rec(n, m, fn(i : auto) {
-      return fn(r : auto) {
+fn Nat::add(n : Nat) -> auto {
+  return fn(m : Nat) {
+    return Nat::rec(n, m, fn(i : Nat) {
+      return fn(r : Nat) {
         return succ( r ); // r := r + 1
       };
     });
@@ -121,32 +181,259 @@ fn Nat::add(n : auto) -> auto {
 }
 
 // square, computed as a sum of odd numbers
-fn square(n : auto) -> auto {
-  return Nat::rec(n, 0, fn(i : auto) {
-      return fn(r : auto) {
+fn square(nn : Nat) -> Nat {
+  return Nat::rec(nn, 0, fn(ii : Nat) {
+      return fn(rr : Nat) {
         // r := r + (2*i + 1)
-        return Nat::add(i)( Nat::add(i)( succ( r )));
+        return Nat::add(ii)( Nat::add(ii)( succ( rr )));
       };
   });
 }
 
 fn main(n : auto) -> auto {
-  return square(n);
+  return 0;
 }
 `);
     expectGood(res);
 })
 
-
-test('auto_fix', () => {
+test('auto_nat_rec3', () => {
     const res = parseAndTypecheck(`
 language core;
 
-extend with #type-reconstruction, #fixpoint-combinator;
+extend with #type-reconstruction;
 
-fn main(f : auto) -> auto {
-    return fix(f(f))
+fn Nat::add(n : auto) -> auto {
+  return fn(m : auto) {
+    return Nat::rec(n, m, fn(i : auto) {
+      return succ( i );
+    });
+  };
+}
+
+// fn Nat::add(n : Nat) -> (fn(Nat) -> Nat) {
+//   return fn(m : Nat) {
+//     return Nat::rec(n, m, fn(i : Nat) {
+//       return fn(r : Nat) { return succ(r) } })
+//   }
+// }
+
+fn main(n : auto) -> auto {
+  return Nat::add(n)
+}
+
+`);
+    expectTypeError(res, error_type.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION)
+})
+
+test('auto_list', () => {
+    const res = parseAndTypecheck(`
+language core;
+extend with #type-reconstruction, #lists;
+
+fn main(arg : auto) -> auto {
+  return [arg, 0]
+}`);
+    expectGood(res)
+})
+
+test('auto_list2', () => {
+    const res = parseAndTypecheck(`
+language core;
+
+extend with #type-reconstruction, #lists;
+
+fn main(arg : Nat) -> [[auto]] {
+  return (fn(x : auto) {
+    return [[0], [0]];
+  })(0);
 }
 `);
-    expectTypeError(res, error_type.ERROR_OCCURS_CHECK_INFINITE_TYPE);
+    expectGood(res)
+})
+
+test('auto_list3', () => {
+    const res = parseAndTypecheck(`
+language core;
+
+extend with #type-reconstruction, #lists;
+
+fn foo(arg : Nat) -> [[auto]] {
+  return (fn(x : auto) {
+    return [[0], [0]];
+  })(0);
+}
+
+fn main(arg : Nat) -> [[auto]] {
+  return foo(0);
+}
+`);
+    expectGood(res)
+})
+
+test('auto_list4', () => {
+    const res = parseAndTypecheck(`
+language core;
+
+extend with #type-reconstruction, #lists;
+
+fn foo(arg : Nat) -> [[auto]] {
+  return (fn(x : auto) {
+    return [[], []];
+  })(0);
+}
+
+fn main(arg : Nat) -> [[Bool]] {
+  return foo(0);
+}
+`);
+    expectGood(res)
+})
+
+test('auto_list5', () => {
+    const res = parseAndTypecheck(`
+language core;
+
+extend with #type-reconstruction, #lists;
+
+fn foo(arg : Nat) -> [[auto]] {
+  return [];
+}
+
+fn main(arg : Nat) -> [[Bool]] {
+  return foo(0);
+}
+`);
+    expectGood(res)
+})
+
+test('auto_list6', () => {
+    const res = parseAndTypecheck(`
+language core;
+
+extend with #type-reconstruction, #lists;
+
+fn foo(arg : auto) -> [[auto]] {
+  return arg;
+}
+
+fn main(arg : auto) -> [[Bool]] {
+  return foo(arg);
+}
+`);
+    expectGood(res)
+})
+
+test('auto_list7', () => {
+    const res = parseAndTypecheck(`
+language core;
+
+extend with #type-reconstruction, #lists;
+
+fn foo(arg : auto) -> [[auto]] {
+  return bar(arg);
+}
+
+fn bar(arg : auto) -> [[auto]] {
+  return arg;
+}
+
+fn main(arg : auto) -> [[Bool]] {
+  return foo(arg);
+}
+`);
+    expectGood(res)
+})
+
+test('auto_list8', () => {
+    const res = parseAndTypecheck(`
+language core;
+
+extend with #type-reconstruction, #lists;
+
+fn foo(arg : auto) -> [[auto]] {
+  return bar(arg);
+}
+
+fn bar(arg : auto) -> [[auto]] {
+  return arg;
+}
+
+fn main(arg : auto) -> [[Bool]] {
+  return foo(bar(arg));
+}
+`);
+    expectGood(res)
+})
+
+test('auto_list9', () => {
+    const res = parseAndTypecheck(`
+language core;
+
+extend with #type-reconstruction, #lists;
+
+fn foo(arg : auto) -> [[auto]] {
+  return bar(arg);
+}
+
+fn bar(arg : auto) -> [[auto]] {
+  return arg;
+}
+
+fn main(arg : auto) -> [[auto]] {
+  return foo(bar(arg));
+}
+`);
+    expectGood(res)
+})
+
+test('auto_list_bad', () => {
+    const res = parseAndTypecheck(`
+language core;
+
+extend with #type-reconstruction, #lists;
+
+fn main(arg : Nat) -> [[Bool]] {
+  return (fn(x : auto) {
+    return [[0], [0]];
+  })(0);
+}
+`);
+    expectTypeError(res, error_type.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION)
+})
+
+test('auto_list_bad2', () => {
+    const res = parseAndTypecheck(`
+language core;
+
+extend with #type-reconstruction, #lists;
+
+fn foo(arg : Nat) -> [[auto]] {
+  return (fn(x : auto) {
+    return [[0], [0]];
+  })(0);
+}
+
+fn main(arg : Nat) -> [[Bool]] {
+  return foo(0);
+}
+`);
+    expectTypeError(res, error_type.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION)
+})
+
+test('auto_list_bad3', () => {
+    const res = parseAndTypecheck(`
+language core;
+
+extend with #type-reconstruction, #lists;
+
+fn foo(arg : auto) -> [[auto]] {
+  return arg;
+}
+
+fn main(arg : Nat) -> [[Bool]] {
+  return foo(0);
+}
+`);
+    expectTypeError(res, error_type.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION)
 })

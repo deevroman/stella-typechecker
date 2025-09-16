@@ -1,7 +1,5 @@
 import {expect, test} from 'vitest'
-import {SyntaxErrorReport, parseAndTypecheck, TypeErrorsReport, GoodReport} from "../typechecker";
-import {example} from "../examples";
-import {tokenInfo} from "../utils";
+import {parseAndTypecheck, TypeErrorsReport} from "../typechecker";
 import {error_type} from "../typecheckError";
 import {expectGood, expectTypeError} from "./utils-for-tests";
 
@@ -131,6 +129,62 @@ fn main(n : Nat) -> [Bool] {
 
 `);
     expectTypeError(res, error_type.ERROR_UNEXPECTED_SUBTYPE)
+})
+
+test('list_in_list_literal', () => {
+    const res = parseAndTypecheck(`
+language core;
+
+extend with #lists;
+
+fn main(arg : Nat) -> [[Nat]] {
+  return [[0], [0]]
+}
+    `);
+    expectGood(res);
+})
+
+test('list_in_list_literal2', () => {
+    const res = parseAndTypecheck(`
+language core;
+
+extend with #lists;
+
+fn main(arg : Nat) -> [[Nat]] {
+  return (fn(x : Nat) {
+    return [[0], [0]];
+  })(0);
+}
+    `);
+    expectGood(res);
+})
+
+test('list_in_list_literal_bad', () => {
+    const res = parseAndTypecheck(`
+language core;
+
+extend with #lists;
+
+fn main(arg : Nat) -> [[Nat]] {
+  return [[0], [true]]
+}
+    `);
+    expectTypeError(res, error_type.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION)
+})
+
+test('list_in_list_literal_bad2', () => {
+    const res = parseAndTypecheck(`
+language core;
+
+extend with #lists;
+
+fn main(arg : Nat) -> [[Nat]] {
+  return (fn(x : Nat) {
+    return [[0], [true]];
+  })(0);
+}
+    `);
+    expectTypeError(res, error_type.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION)
 })
 
 test('list_ops', () => {
