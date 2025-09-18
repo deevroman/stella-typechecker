@@ -286,3 +286,18 @@ fn main(x : Bot) -> Bool {
 `);
     expectTypeError(res, error_type.ERROR_NONEXHAUSTIVE_MATCH_PATTERNS)
 })
+
+test('match_res_to_top', () => {
+    const res = parseAndTypecheck(`
+language core;
+extend with #type-cast-patterns, #structural-subtyping, #top-type;
+
+fn main(x : Nat) -> Top {
+  return match x {
+      _ => 0
+    | _ => false
+  }
+}
+`);
+    expectGood(res)
+})

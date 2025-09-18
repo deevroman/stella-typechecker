@@ -1099,7 +1099,7 @@ export class stellaParserVisitorImpl implements stellaParserVisitor<void> {
             matchedTypeVariants.push(casePatternType)
             const value = this.visitExpr(_case._expr_) as StellaType | undefined
             if (value) {
-                if (returnTypes.length > 0) {
+                if (returnTypes.length > 0 && !this.subtypingEnabled) {
                     if (!(returnTypes[0] instanceof StellaAuto)) {
                         if (returnTypes[0].type !== value.type) {
                             if (value instanceof StellaList) {
