@@ -1,11 +1,11 @@
 import {error_type, TypecheckError} from "./typecheckError";
 import {
-    StellaAuto,
+    StellaAuto, StellaBot,
     StellaEntityRecord,
     StellaEntityVariant,
     StellaFunction,
     StellaList, StellaRecord,
-    StellaSumType,
+    StellaSumType, StellaTop,
     StellaTuple,
     StellaType,
     StellaVariant
@@ -18,6 +18,14 @@ export function checkNoexhaustiveMatch(expectedType: StellaType, cases: StellaTy
     }
     if (cases.some(_case => _case instanceof StellaAuto)) {
         return true // hack
+    }
+    if (expectedType instanceof StellaTop) {
+        ctx.addError(new TypecheckError(error_type.ERROR_NONEXHAUSTIVE_MATCH_PATTERNS))
+        return false
+    }
+    if (expectedType instanceof StellaBot) { // todo correct?
+        ctx.addError(new TypecheckError(error_type.ERROR_NONEXHAUSTIVE_MATCH_PATTERNS))
+        return false
     }
     if (expectedType instanceof StellaAuto) {
         if (cases.length > 1) {
@@ -62,6 +70,10 @@ function firstConstructor(type: StellaType): StellaType {
         return new StellaType(type.type).addValue("0", true)
     } else if (type.type === "UNIT_TYPE") {
         return new StellaType(type.type).addValue("unit", true)
+    } else if (type.type === "TOP_TYPE") {
+        return new StellaTop()
+    } else if (type.type === "BOT_TYPE") {
+        return new StellaBot()
     }
     if (type instanceof StellaTuple) {
         return new StellaTuple(type.elems.map(firstConstructor))
@@ -114,6 +126,12 @@ function nextConstructor(constructor: StellaType, ctx: stellaParserVisitorImpl):
         return undefined
     }
     if (constructor.type === "UNIT_TYPE") {
+        return undefined
+    }
+    if (constructor.type === "TOP_TYPE") {
+        return undefined
+    }
+    if (constructor.type === "BOT_TYPE") {
         return undefined
     }
     if (constructor instanceof StellaTuple) {
@@ -254,6 +272,12 @@ function tryMatch(constr: StellaType, pat: StellaType, ctx: stellaParserVisitorI
         } else {
             return !pat.isEqualValue && parseInt(constr.value!) >= parseInt(pat.value!)
         }
+    }
+    if (constr.type === "TOP_TYPE" && pat.type === "TOP_TYPE") {
+        return true
+    }
+    if (constr.type === "BOT_TYPE" && pat.type === "BOT_TYPE") {
+        return true
     }
 
     if (constr instanceof StellaTuple && pat instanceof StellaTuple) {

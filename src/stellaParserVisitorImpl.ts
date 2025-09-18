@@ -1327,9 +1327,24 @@ export class stellaParserVisitorImpl implements stellaParserVisitor<void> {
         return undefined;
     }
 
-    visitPatternCastAs(ctx: PatternCastAsContext): void {
+    visitPatternCastAs(ctx: PatternCastAsContext): StellaType | undefined {
+        const castType = ctx._type_.accept(this) as StellaType | undefined
+        if (castType === undefined) {
+            return undefined
+        }
+        const patternContextType = this.getPatternType()
+        if (patternContextType !== undefined) {
+            castType.tryAssignTo(patternContextType, this)
+        }
+
+        this.addPatternType(castType)
+        const patternType = ctx._pattern_.accept(this)
+        if (patternType === undefined) {
+            return undefined
+        }
+        this.dropPatternType()
         debugger;
-        return undefined;
+        return castType;
     }
 
     visitPatternCons(ctx: PatternConsContext): StellaType | undefined {

@@ -170,3 +170,119 @@ fn main(n : Nat) -> Nat {
 `);
     expectTypeError(res, error_type.ERROR_UNEXPECTED_SUBTYPE)
 })
+
+test('match_top', () => {
+    const res = parseAndTypecheck(`
+language core;
+extend with 
+    #type-cast-patterns, 
+    #structural-subtyping, 
+    #top-type, 
+    #sum-types;
+
+fn main(x : Top) -> Bool {
+    return match x {
+        b cast as Bool => true
+        | _ => false
+    }
+}
+`);
+    expectGood(res)
+})
+
+test('match_inl_top', () => {
+    const res = parseAndTypecheck(`
+language core;
+extend with 
+    #type-cast-patterns, 
+    #structural-subtyping,
+    #structural-patterns, 
+    #top-type, 
+    #bottom-type,
+    #sum-types;
+
+fn main(x : Top + Top) -> Bool {
+  return match x {
+     inl(x) => false
+    | inr(x) => false
+  }
+}
+`);
+    expectGood(res)
+})
+
+test('match_ne_top', () => {
+    const res = parseAndTypecheck(`
+language core;
+extend with 
+    #type-cast-patterns, 
+    #structural-subtyping, 
+    #top-type, 
+    #sum-types;
+
+fn main(x : Top) -> Bool {
+  return match x {
+      b cast as Bool => true
+  }
+}
+`);
+    expectTypeError(res, error_type.ERROR_NONEXHAUSTIVE_MATCH_PATTERNS)
+})
+
+test('match_ne_inl_top', () => {
+    const res = parseAndTypecheck(`
+language core;
+extend with 
+    #type-cast-patterns, 
+    #structural-subtyping,
+    #structural-patterns, 
+    #top-type, 
+    #bottom-type,
+    #sum-types;
+
+fn main(x : Top + Top) -> Bool {
+  return match x {
+     inl(x) => false
+  }
+}
+`);
+    expectTypeError(res, error_type.ERROR_NONEXHAUSTIVE_MATCH_PATTERNS)
+})
+
+test('match_bot_bad', () => {
+    const res = parseAndTypecheck(`
+language core;
+extend with 
+    #type-cast-patterns, 
+    #structural-subtyping, 
+    #top-type, 
+    #bottom-type,
+    #sum-types;
+
+fn main(x : Bot) -> Bool {
+    return match x {
+        b cast as Bool => true
+    }
+}
+`);
+    expectTypeError(res, error_type.ERROR_UNEXPECTED_SUBTYPE)
+})
+
+test('match_ne_bot', () => {
+    const res = parseAndTypecheck(`
+language core;
+extend with 
+  #type-cast-patterns, 
+  #structural-subtyping, 
+  #top-type, 
+  #bottom-type,
+  #sum-types;
+
+fn main(x : Bot) -> Bool {
+    return match x {
+        b cast as Bot => true
+    }
+}
+`);
+    expectTypeError(res, error_type.ERROR_NONEXHAUSTIVE_MATCH_PATTERNS)
+})
