@@ -72,12 +72,19 @@ const stellaExtensions = [
 ]
 
 function stellaCompletion(context: CompletionContext) {
-    debugger
-    let word = context.matchBefore(/[#\w]*/);
+    let word = context.matchBefore(/#[\w]*/);
+    if (word) {
+        if (!word || (word.from == word.to && !context.explicit)) return null;
+        return {
+            from: word.from,
+            options: stellaExtensions.map(kw => ({label: kw, type: "keyword"}))
+        };
+    }
+    word = context.matchBefore(/\w*/);
     if (!word || (word.from == word.to && !context.explicit)) return null;
     return {
         from: word.from,
-        options: [...stellaKeywords, ...stellaExtensions].map(kw => ({label: kw, type: "keyword"}))
+        options: stellaKeywords.map(kw => ({label: kw, type: "keyword"}))
     };
 }
 
