@@ -1,9 +1,9 @@
 import {example} from "./examples";
 import {SyntaxErrorReport, parseAndTypecheck} from "./typechecker";
-import { autocompletion, CompletionContext } from "@codemirror/autocomplete";
-import { EditorState } from "@codemirror/state";
-import { EditorView } from "@codemirror/view";
-import { basicSetup } from "codemirror";
+import {CompletionContext, autocompletion} from "@codemirror/autocomplete";
+import {EditorState} from "@codemirror/state";
+import {EditorView} from "@codemirror/view";
+import {basicSetup} from "codemirror";
 import {tokenInfo} from "./utils";
 
 
@@ -14,12 +14,70 @@ const stellaKeywords = [
     "panic!", "Top", "Bot", "Nat", "Bool", "Unit"
 ];
 
+const stellaExtensions = [
+    "#ambiguous-type-as-bottom",
+    "#arithmetic-operators",
+    "#bottom-type",
+    "#comparison-operators",
+    "#endif",
+    "#equirecursive-types",
+    "#error",
+    "#exception-type-declaration",
+    "#exceptions",
+    "#fixpoint-combinator",
+    "#general-recursion",
+    "#ifdef",
+    "#include",
+    "#inline-functions",
+    "#integers",
+    "#isorecursive-types",
+    "#let-bindings",
+    "#let-many-bindings",
+    "#let-patterns",
+    "#letrec-bindings",
+    "#letrec-many-bindings",
+    "#lists",
+    "#logical-operators",
+    "#multiparameter-functions",
+    "#natural-literals",
+    "#nested-function-declarations",
+    "#no-return-type-as-auto",
+    "#no-return-type-as-unit",
+    "#nullary-functions",
+    "#nullary-variant-labels",
+    "#open-variant-exceptions",
+    "#pairs",
+    "#panic",
+    "#pattern-ascriptions",
+    "#predecessor",
+    "#records",
+    "#recursive-types",
+    "#references",
+    "#sequencing",
+    "#structural-patterns",
+    "#structural-subtyping",
+    "#sum-types",
+    "#throw-type-annotations",
+    "#top-type",
+    "#try-cast-as",
+    "#tuples",
+    "#type-aliases",
+    "#type-ascriptions",
+    "#type-cast",
+    "#type-cast-patterns",
+    "#type-reconstruction",
+    "#unit-type",
+    "#universal-types",
+    "#variants"
+]
+
 function stellaCompletion(context: CompletionContext) {
-    let word = context.matchBefore(/\w*/);
+    debugger
+    let word = context.matchBefore(/[#\w]*/);
     if (!word || (word.from == word.to && !context.explicit)) return null;
     return {
         from: word.from,
-        options: stellaKeywords.map(kw => ({ label: kw, type: "keyword" }))
+        options: [...stellaKeywords, ...stellaExtensions].map(kw => ({label: kw, type: "keyword"}))
     };
 }
 
@@ -72,7 +130,14 @@ if (typeof window !== undefined) {
     const editor = new EditorView({
         state: EditorState.create({
             doc: example,
-            extensions: [basicSetup, myTheme, onUpdate, /*autocompletion({ override: [stellaCompletion] })*/],
+            extensions: [
+                basicSetup,
+                myTheme,
+                onUpdate,
+                autocompletion({
+                    override: [stellaCompletion]
+                })
+            ],
         }),
         parent: document.getElementById("code")!
     });
